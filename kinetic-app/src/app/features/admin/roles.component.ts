@@ -6,16 +6,17 @@ import { MastersService } from '../../services/masters.service';
 import { AuthService } from '../../services/auth.service';
 import { Role, Permission } from '../../models';
 import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialog.component';
+import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.component';
 
 @Component({
   selector: 'app-admin-roles',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, ConfirmDialogComponent],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, ConfirmDialogComponent, DrawerPanelComponent],
   host: { class: 'flex flex-1 flex-col min-h-0 w-full' },
   template: `
     <div class="flex flex-col flex-1 min-h-0 p-4 max-w-7xl w-full mx-auto gap-4">
 
-      <div class="rounded-xl border border-slate-200/80 bg-gradient-to-r from-white to-emerald-50/40 px-4 py-3 shadow-sm flex-shrink-0">
+      <div class="k-page-intro">
         <h1 class="text-sm font-semibold text-slate-900 tracking-tight">Roles &amp; permissions</h1>
         <p class="text-xs text-slate-500 mt-0.5 max-w-2xl">
           Select a role to inspect capability codes, then save when you are ready — changes apply on the next request.
@@ -64,7 +65,7 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
                     </div>
                     <div class="min-w-0">
                       <p class="font-medium text-slate-800 text-xs">{{ role.role_name }}</p>
-                      <p class="text-[10px] text-slate-400 truncate">{{ role.role_description }}</p>
+                      <p class="text-2xs text-slate-400 truncate">{{ role.role_description }}</p>
                     </div>
                   </div>
                   <div class="flex items-center gap-0.5 flex-shrink-0 ml-2">
@@ -121,8 +122,8 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
                            (change)="togglePermission(perm.permission_code, $event)">
                     <div>
                       <p class="text-xs font-medium text-slate-800">{{ perm.permission_name }}</p>
-                      <p class="text-[10px] text-slate-400">{{ perm.permission_description }}</p>
-                      <code class="text-[10px] text-slate-400 font-mono">{{ perm.permission_code }}</code>
+                      <p class="text-2xs text-slate-400">{{ perm.permission_description }}</p>
+                      <code class="text-2xs text-slate-400 font-mono">{{ perm.permission_code }}</code>
                     </div>
                   </label>
                 }
@@ -134,53 +135,40 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
       </div>
     </div>
 
-    <!-- Drawer backdrop -->
-    @if (drawerOpen()) {
-      <div class="fixed inset-0 bg-black/40 z-40" (click)="closeDrawer()"></div>
-    }
-
-    <!-- Role form drawer -->
-    <div class="fixed top-0 right-0 h-full w-full max-w-sm bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300"
-         [class.translate-x-full]="!drawerOpen()"
-         [class.translate-x-0]="drawerOpen()">
-
-      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 flex-shrink-0">
-        <h2 class="text-sm font-semibold text-slate-900">{{ editingRole() ? 'Edit Role' : 'Add Role' }}</h2>
-        <button (click)="closeDrawer()" class="p-1.5 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100">
-          <span class="material-symbols-outlined text-[18px]">close</span>
-        </button>
-      </div>
-
-      <div class="flex-1 overflow-y-auto p-4">
-        @if (form) {
-          <form [formGroup]="form" class="space-y-3">
-            <div>
-              <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Role Name *</label>
-              <input formControlName="role_name" type="text" placeholder="e.g. Editor"
-                     class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary">
-              @if (form.get('role_name')?.invalid && form.get('role_name')?.touched) {
-                <p class="text-red-500 text-[10px] mt-1">Role name is required</p>
-              }
-            </div>
-            <div>
-              <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Description</label>
-              <textarea formControlName="role_description" rows="3" placeholder="Describe what this role can do…"
-                        class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary resize-none"></textarea>
-            </div>
-          </form>
-        }
-      </div>
-
-      <div class="px-4 py-3 border-t border-slate-100 flex gap-2 justify-end flex-shrink-0">
-        <button class="px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
+    <app-drawer-panel
+      [open]="drawerOpen()"
+      [title]="editingRole() ? 'Edit role' : 'Add role'"
+      subtitle="Name and describe the role here. Select the role in the list to edit its permissions in the adjacent panel."
+      size="sm"
+      (closed)="closeDrawer()"
+      (backdropClose)="closeDrawer()">
+      @if (form) {
+        <form [formGroup]="form" class="space-y-3">
+          <div>
+            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Role name *</label>
+            <input formControlName="role_name" type="text" placeholder="e.g. Editor"
+                   class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary">
+            @if (form.get('role_name')?.invalid && form.get('role_name')?.touched) {
+              <p class="text-red-500 text-2xs mt-1">Role name is required</p>
+            }
+          </div>
+          <div>
+            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Description</label>
+            <textarea formControlName="role_description" rows="3" placeholder="Describe what this role can do…"
+                      class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary resize-none"></textarea>
+          </div>
+        </form>
+      }
+      <div drawerFooter>
+        <button type="button" class="px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
                 (click)="closeDrawer()">Cancel</button>
-        <button class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-white rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
+        <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-white rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
                 [disabled]="saving()" (click)="save()">
           @if (saving()) { <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span> }
-          {{ editingRole() ? 'Save Changes' : 'Create Role' }}
+          {{ editingRole() ? 'Save changes' : 'Create role' }}
         </button>
       </div>
-    </div>
+    </app-drawer-panel>
 
     <app-confirm-dialog
       [open]="!!deleteTarget()"

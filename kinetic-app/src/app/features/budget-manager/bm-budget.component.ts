@@ -4,17 +4,17 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angu
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { BudgetWorkspaceService, BmBudgetLine, BmProjectRow } from '../../services/budget-workspace.service';
-import { ModalComponent } from '../../shared/components/ui/modal.component';
+import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.component';
 import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialog.component';
 
 @Component({
   selector: 'app-bm-budget',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, ModalComponent, ConfirmDialogComponent],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, DrawerPanelComponent, ConfirmDialogComponent],
   template: `
     <div class="p-4 max-w-7xl mx-auto space-y-4">
 
-      <div class="rounded-xl border border-slate-200/80 bg-gradient-to-br from-white via-white to-emerald-50/40 px-4 py-3.5 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div class="k-page-intro py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div class="min-w-0">
           <h1 class="text-sm font-semibold text-slate-900 tracking-tight">Budget lines</h1>
           <p class="text-xs text-slate-500 mt-0.5">
@@ -22,7 +22,7 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <label class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider sr-only">Project</label>
+          <label class="text-2xs font-semibold text-slate-500 uppercase tracking-wider sr-only">Project</label>
           <select [ngModel]="selectedProjectId() ?? ''" (ngModelChange)="onProjectChange($event)"
                   class="text-xs font-medium border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 min-w-[200px] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
             <option value="">All projects</option>
@@ -48,9 +48,9 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
         @for (s of statCards(); track s.label) {
           <div class="bg-white rounded-lg border border-slate-100 px-4 py-3 shadow-sm">
-            <p class="text-[10px] text-slate-400 uppercase tracking-wider font-medium">{{ s.label }}</p>
+            <p class="text-2xs text-slate-400 uppercase tracking-wider font-medium">{{ s.label }}</p>
             <p class="text-xl font-bold mt-0.5 tabular-nums" [class]="s.color">{{ s.value }}</p>
-            <p class="text-[10px] text-slate-400 mt-0.5">{{ s.sub }}</p>
+            <p class="text-2xs text-slate-400 mt-0.5">{{ s.sub }}</p>
           </div>
         }
       </div>
@@ -71,15 +71,15 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
               <thead>
                 <tr class="bg-slate-50/90 border-b border-slate-100">
                   @if (!selectedProjectId()) {
-                    <th class="text-left px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Project</th>
+                    <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 uppercase tracking-wider">Project</th>
                   }
-                  <th class="text-left px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Category</th>
-                  <th class="text-right px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Allocated</th>
-                  <th class="text-right px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Spent</th>
-                  <th class="text-right px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Remaining</th>
-                  <th class="text-left px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Usage</th>
-                  <th class="text-left px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th class="text-right px-3 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                  <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 uppercase tracking-wider">Category</th>
+                  <th class="text-right px-3 py-2.5 text-2xs font-semibold text-slate-500 uppercase tracking-wider">Allocated</th>
+                  <th class="text-right px-3 py-2.5 text-2xs font-semibold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Spent</th>
+                  <th class="text-right px-3 py-2.5 text-2xs font-semibold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Remaining</th>
+                  <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Usage</th>
+                  <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th class="text-right px-3 py-2.5 text-2xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -88,7 +88,7 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
                     @if (!selectedProjectId()) {
                       <td class="px-3 py-2.5 text-slate-600 max-w-[140px]">
                         <span class="truncate block font-medium text-slate-800">{{ projectName(r.projectId) }}</span>
-                        <span class="text-[10px] text-slate-400 font-mono">{{ r.projectId }}</span>
+                        <span class="text-2xs text-slate-400 font-mono">{{ r.projectId }}</span>
                       </td>
                     }
                     <td class="px-3 py-2.5">
@@ -106,11 +106,11 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
                         <div class="h-1.5 w-16 bg-slate-100 rounded-full overflow-hidden">
                           <div class="h-full rounded-full" [style.width.%]="linePct(r)" [class]="lineBarClass(r)"></div>
                         </div>
-                        <span class="text-[10px] tabular-nums text-slate-500">{{ linePct(r) }}%</span>
+                        <span class="text-2xs tabular-nums text-slate-500">{{ linePct(r) }}%</span>
                       </div>
                     </td>
                     <td class="px-3 py-2.5">
-                      <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold" [class]="statusClass(r.status)">{{ r.status }}</span>
+                      <span class="px-2 py-0.5 rounded-md text-2xs font-semibold" [class]="statusClass(r.status)">{{ r.status }}</span>
                     </td>
                     <td class="px-3 py-2.5 text-right">
                       <div class="flex justify-end gap-0.5">
@@ -153,7 +153,7 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
         <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
           <div class="px-4 py-3 border-b border-slate-100">
             <span class="text-xs font-semibold text-slate-800">Monthly spend</span>
-            <p class="text-[10px] text-slate-400 mt-0.5">{{ monthlyCaption() }}</p>
+            <p class="text-2xs text-slate-400 mt-0.5">{{ monthlyCaption() }}</p>
           </div>
           <div class="p-4 space-y-3 flex-1 overflow-y-auto max-h-[420px]">
             @for (m of monthly; track m.month) {
@@ -172,7 +172,7 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
       </div>
     </div>
 
-    <app-modal
+    <app-drawer-panel
       [open]="lineModalOpen()"
       [title]="editingLine() ? 'Edit budget line' : 'New budget line'"
       subtitle="Allocations roll up to the project’s approved budget on the Projects screen."
@@ -182,7 +182,7 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
       @if (lineForm) {
         <form [formGroup]="lineForm" class="space-y-3">
           <div>
-            <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Project</label>
+            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Project</label>
             <select formControlName="projectId"
                     class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
               @for (p of ws.projects(); track p.id) {
@@ -191,25 +191,25 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
             </select>
           </div>
           <div>
-            <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Category</label>
+            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Category</label>
             <input formControlName="category" type="text" placeholder="e.g. Engineering"
                    class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
             @if (lineForm.get('category')?.invalid && lineForm.get('category')?.touched) {
-              <p class="text-red-600 text-[10px] mt-1">Category is required</p>
+              <p class="text-red-600 text-2xs mt-1">Category is required</p>
             }
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Allocated</label>
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Allocated</label>
               <input formControlName="allocated" type="number" min="0" step="100" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
             </div>
             <div>
-              <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Spent</label>
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Spent</label>
               <input formControlName="spent" type="number" min="0" step="100" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
             </div>
           </div>
           <div>
-            <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Status</label>
+            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Status</label>
             <select formControlName="status"
                     class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
               <option>On Track</option>
@@ -219,13 +219,13 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
           </div>
         </form>
       }
-      <div modalFooter>
+      <div drawerFooter>
         <button type="button" class="px-3 py-2 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg bg-white hover:bg-slate-50"
                 (click)="closeLineModal()">Cancel</button>
         <button type="button" class="px-3 py-2 text-xs font-semibold bg-primary text-white rounded-lg hover:bg-primary/90"
                 (click)="saveLine()">{{ editingLine() ? 'Save changes' : 'Add line' }}</button>
       </div>
-    </app-modal>
+    </app-drawer-panel>
 
     <app-confirm-dialog
       [open]="!!deleteLineTarget()"

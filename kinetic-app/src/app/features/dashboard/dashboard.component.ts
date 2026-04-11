@@ -30,16 +30,16 @@ import { CommonModule } from '@angular/common';
         <div class="lg:col-span-2 bg-white rounded-lg border border-slate-100 overflow-hidden">
           <div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
             <span class="text-xs font-semibold text-slate-700">Recent Tasks</span>
-            <span class="text-[10px] text-slate-400">Last 7 days</span>
+            <span class="text-2xs text-slate-400">Last 7 days</span>
           </div>
           <table class="w-full text-xs">
             <thead>
               <tr class="bg-slate-50/60 border-b border-slate-100">
-                <th class="text-left px-4 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Task</th>
-                <th class="text-left px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Project</th>
-                <th class="text-left px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                <th class="text-left px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">Priority</th>
-                <th class="text-left px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider hidden lg:table-cell">Due</th>
+                <th class="text-left px-4 py-1.5 text-2xs font-semibold text-slate-400 uppercase tracking-wider">Task</th>
+                <th class="text-left px-3 py-1.5 text-2xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Project</th>
+                <th class="text-left px-3 py-1.5 text-2xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                <th class="text-left px-3 py-1.5 text-2xs font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">Priority</th>
+                <th class="text-left px-3 py-1.5 text-2xs font-semibold text-slate-400 uppercase tracking-wider hidden lg:table-cell">Due</th>
               </tr>
             </thead>
             <tbody>
@@ -47,14 +47,14 @@ import { CommonModule } from '@angular/common';
                 <tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                   <td class="px-4 py-2">
                     <p class="font-medium text-slate-800 truncate max-w-[200px]">{{ t.title }}</p>
-                    <p class="text-[10px] text-slate-400">{{ t.id }}</p>
+                    <p class="text-2xs text-slate-400">{{ t.id }}</p>
                   </td>
                   <td class="px-3 py-2 text-slate-500 hidden sm:table-cell">{{ t.project }}</td>
                   <td class="px-3 py-2">
-                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold" [class]="statusClass(t.status)">{{ t.status }}</span>
+                    <span class="px-1.5 py-0.5 rounded text-2xs font-semibold" [class]="statusClass(t.status)">{{ t.status }}</span>
                   </td>
                   <td class="px-3 py-2 hidden md:table-cell">
-                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold" [class]="priorityClass(t.priority)">{{ t.priority }}</span>
+                    <span class="px-1.5 py-0.5 rounded text-2xs font-semibold" [class]="priorityClass(t.priority)">{{ t.priority }}</span>
                   </td>
                   <td class="px-3 py-2 text-slate-400 hidden lg:table-cell">{{ t.due }}</td>
                 </tr>
@@ -67,14 +67,14 @@ import { CommonModule } from '@angular/common';
         <div class="bg-white rounded-lg border border-slate-100 overflow-hidden">
           <div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
             <span class="text-xs font-semibold text-slate-700">Projects</span>
-            <span class="text-[10px] text-primary font-medium cursor-pointer">View all</span>
+            <span class="text-2xs text-primary font-medium cursor-pointer">View all</span>
           </div>
           <div class="divide-y divide-slate-50">
             @for (p of projects; track p.name) {
               <div class="px-4 py-2.5">
                 <div class="flex items-center justify-between mb-1">
                   <span class="text-xs font-medium text-slate-800 truncate max-w-[130px]">{{ p.name }}</span>
-                  <span class="text-[10px] text-slate-400">{{ p.done }}/{{ p.total }}</span>
+                  <span class="text-2xs text-slate-400">{{ p.done }}/{{ p.total }}</span>
                 </div>
                 <div class="h-1 bg-slate-100 rounded-full overflow-hidden">
                   <div class="h-full bg-primary rounded-full" [style.width.%]="(p.done/p.total)*100"></div>
@@ -93,16 +93,16 @@ import { CommonModule } from '@angular/common';
           <div class="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
             <span class="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"></span>
             <span class="text-xs font-semibold text-slate-700">Overdue</span>
-            <span class="ml-auto text-[10px] font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">3</span>
+            <span class="ml-auto text-2xs font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">3</span>
           </div>
           <div class="divide-y divide-slate-50">
             @for (t of overdueTasks; track t.id) {
               <div class="px-4 py-2 flex items-center justify-between">
                 <div>
                   <p class="text-xs font-medium text-slate-800">{{ t.title }}</p>
-                  <p class="text-[10px] text-slate-400">{{ t.project }}</p>
+                  <p class="text-2xs text-slate-400">{{ t.project }}</p>
                 </div>
-                <span class="text-[10px] text-red-500 font-medium">{{ t.due }}</span>
+                <span class="text-2xs text-red-500 font-medium">{{ t.due }}</span>
               </div>
             }
           </div>
@@ -113,16 +113,16 @@ import { CommonModule } from '@angular/common';
           <div class="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
             <span class="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0"></span>
             <span class="text-xs font-semibold text-slate-700">Due This Week</span>
-            <span class="ml-auto text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">5</span>
+            <span class="ml-auto text-2xs font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">5</span>
           </div>
           <div class="divide-y divide-slate-50">
             @for (t of upcomingTasks; track t.id) {
               <div class="px-4 py-2 flex items-center justify-between">
                 <div>
                   <p class="text-xs font-medium text-slate-800">{{ t.title }}</p>
-                  <p class="text-[10px] text-slate-400">{{ t.project }}</p>
+                  <p class="text-2xs text-slate-400">{{ t.project }}</p>
                 </div>
-                <span class="text-[10px] text-amber-600 font-medium">{{ t.due }}</span>
+                <span class="text-2xs text-amber-600 font-medium">{{ t.due }}</span>
               </div>
             }
           </div>

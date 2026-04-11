@@ -4,7 +4,21 @@
 
 @layer base {
   * { box-sizing: border-box; }
-  body { font-family: 'Inter', sans-serif; }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-surface text-on-surface font-sans antialiased;
+    font-size: 15px;
+    line-height: 1.5;
+    font-optical-sizing: auto;
+    font-feature-settings: "liga" 1, "calt" 1, "kern" 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
 
 @layer components {
@@ -36,7 +50,7 @@
   }
 
   .k-label {
-    @apply block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-1;
+    @apply block text-2xs font-semibold uppercase tracking-wider text-on-surface-variant mb-1;
   }
 
   /* Button styles */
@@ -64,12 +78,12 @@
            hover:bg-primary-fixed/30 transition-colors flex items-center gap-2;
   }
 
-  /* Table */
+  /* Table — tabular figures + tight leading for scan-friendly rows */
   .k-table thead th {
-    @apply px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-outline bg-surface-container-low;
+    @apply px-6 py-3 text-2xs font-semibold uppercase tracking-wider text-outline bg-surface-container-low;
   }
   .k-table tbody td {
-    @apply px-6 py-4 text-sm;
+    @apply px-6 py-3 text-sm leading-snug text-on-surface;
   }
   .k-table tbody tr {
     @apply border-b border-surface-container hover:bg-surface-container-low/30 transition-colors;
@@ -101,7 +115,221 @@
   .row-overdue {
     @apply bg-error-container/10;
   }
+
+  /* Shell main / data-heavy views: aligned numerals & dates in columns */
+  .k-app-data {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * Page title strip — light: soft gradient; dark: flat Material surface (no washed-out tints).
+   */
+  .k-page-intro {
+    @apply rounded-xl border px-4 py-3 shadow-sm flex-shrink-0;
+    border-color: rgba(226, 232, 240, 0.9);
+    background: linear-gradient(to right, #ffffff, #f8fafc);
+  }
+
+  html.dark .k-page-intro {
+    border-color: #3f3f46;
+    background: #171717;
+    box-shadow: none;
+  }
+
+  html.dark .k-page-intro .text-slate-900 {
+    color: #fafafa;
+  }
+
+  html.dark .k-page-intro .text-slate-500 {
+    color: #a1a1aa;
+  }
 }
+
+/*
+ * Theme 2 — Material black & white (neutral zinc): high contrast, no blue-gray slate cast.
+ */
+@layer utilities {
+  html.dark {
+    color-scheme: dark;
+  }
+
+  html.dark body {
+    background-color: #1e1e1e;
+    color: #fafafa;
+  }
+
+  html.dark .k-app-data .bg-white {
+    background-color: #141414;
+  }
+
+  html.dark .k-app-data .bg-slate-50 {
+    background-color: #0a0a0a;
+  }
+
+  html.dark .k-app-data .bg-slate-50\/60 {
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+
+  html.dark .k-app-data .bg-slate-100 {
+    background-color: #27272a;
+  }
+
+  html.dark .k-app-data .border-slate-100,
+  html.dark .k-app-data .border-slate-200 {
+    border-color: #3f3f46;
+  }
+
+  html.dark .k-app-data .divide-slate-50 > * + * {
+    border-color: #27272a;
+  }
+
+  html.dark .k-app-data .text-slate-900 {
+    color: #fafafa;
+  }
+
+  html.dark .k-app-data .text-slate-800 {
+    color: #f4f4f5;
+  }
+
+  html.dark .k-app-data .text-slate-700 {
+    color: #d4d4d8;
+  }
+
+  html.dark .k-app-data .text-slate-600 {
+    color: #a1a1aa;
+  }
+
+  html.dark .k-app-data .text-slate-500 {
+    color: #a1a1aa;
+  }
+
+  html.dark .k-app-data .text-slate-400 {
+    color: #71717a;
+  }
+
+  html.dark .k-app-data .text-slate-300 {
+    color: #d4d4d8;
+  }
+
+  html.dark .k-app-data .text-slate-200 {
+    color: #52525b;
+  }
+
+  html.dark .k-app-data .shadow-sm {
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.55);
+  }
+
+  html.dark .k-app-data .hover\:bg-slate-100:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  html.dark .k-app-data .hover\:bg-slate-50:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+
+  html.dark .k-app-data .hover\:bg-slate-50\/50:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+
+  html.dark .k-app-data .hover\:bg-slate-50\/60:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+  }
+
+  html.dark .k-app-data .bg-red-50 {
+    background-color: rgba(127, 29, 29, 0.35);
+  }
+
+  html.dark .k-app-data .border-red-200 {
+    border-color: rgba(248, 113, 113, 0.35);
+  }
+
+  html.dark .k-app-data .text-red-700 {
+    color: #fca5a5;
+  }
+
+  html.dark .k-app-data .hover\:bg-red-50:hover {
+    background-color: rgba(127, 29, 29, 0.25);
+  }
+
+  /* Cursor / VS Code–style dark chrome: neutral accents, no indigo primary */
+  html.dark aside a.bg-primary.text-white,
+  html.dark aside a.router-link-active.bg-primary {
+    background-color: #37373d !important;
+    color: #f3f3f3 !important;
+  }
+
+  html.dark .bg-primary.text-white:not(.k-keep-primary-dark) {
+    background-color: #3e3e42 !important;
+    color: #f3f3f3 !important;
+  }
+
+  html.dark .hover\:bg-primary\/90:hover {
+    background-color: #4a4a4a !important;
+  }
+
+  html.dark .text-primary {
+    color: #cccccc !important;
+  }
+
+  html.dark .bg-primary\/10 {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+  }
+
+  html.dark .border-primary\/15 {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+  }
+
+  html.dark .ring-primary\/20,
+  html.dark .ring-primary\/25,
+  html.dark .ring-primary\/30 {
+    --tw-ring-color: rgba(255, 255, 255, 0.12) !important;
+  }
+
+  html.dark .focus\:border-primary:focus {
+    border-color: #6b6b6b !important;
+  }
+
+  html.dark .from-primary {
+    --tw-gradient-from: #3e3e42 !important;
+    --tw-gradient-to: rgb(62 62 66 / 0) !important;
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+  }
+
+  html.dark .to-primary-container {
+    --tw-gradient-to: #4a4a4a !important;
+  }
+}
+
+/* Login + global buttons in dark */
+html.dark .btn-primary {
+  background-image: none !important;
+  background-color: #3e3e42 !important;
+  color: #f3f3f3 !important;
+  box-shadow: none !important;
+}
+
+html.dark .btn-primary:hover {
+  background-color: #4a4a4a !important;
+}
+
+html.dark .btn-ghost {
+  color: #d4d4d4 !important;
+}
+
+html.dark .btn-ghost:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Top loader strip */
+html.dark .k-loader-bar {
+  background: linear-gradient(90deg, transparent, #737373, #a3a3a3, transparent);
+}
+
+/* Page center loader rings */
+html.dark .pl__ring--a { stroke: #737373 !important; }
+html.dark .pl__ring--b { stroke: #a3a3a3 !important; }
+html.dark .pl__ring--c { stroke: #525252 !important; }
+html.dark .pl__ring--d { stroke: #d4d4d4 !important; }
 
 /* Global top-bar loader */
 @keyframes k-loader-slide {

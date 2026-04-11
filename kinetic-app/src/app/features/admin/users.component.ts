@@ -5,15 +5,16 @@ import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { MastersService } from '../../services/masters.service';
 import { AdminUser } from '../../models';
+import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.component';
 
 @Component({
   selector: 'app-admin-users',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, DrawerPanelComponent],
   template: `
     <div class="p-4 max-w-7xl mx-auto space-y-4">
 
-      <div class="rounded-xl border border-slate-200/80 bg-gradient-to-r from-white to-slate-50 px-4 py-3 shadow-sm">
+      <div class="k-page-intro">
         <h1 class="text-sm font-semibold text-slate-900 tracking-tight">Users</h1>
         <p class="text-xs text-slate-500 mt-0.5 max-w-2xl">
           Accounts, roles, and activation — keep this list accurate so the rest of the app stays permission-aware.
@@ -44,12 +45,12 @@ import { AdminUser } from '../../models';
         <table class="w-full text-xs">
           <thead>
             <tr class="bg-slate-50 border-b border-slate-100">
-              <th class="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">User</th>
-              <th class="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Email</th>
-              <th class="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Role</th>
-              <th class="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-              <th class="text-left px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">Last Login</th>
-              <th class="text-right px-3 py-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
+              <th class="text-left px-3 py-2 text-2xs font-semibold text-slate-400 uppercase tracking-wider">User</th>
+              <th class="text-left px-3 py-2 text-2xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Email</th>
+              <th class="text-left px-3 py-2 text-2xs font-semibold text-slate-400 uppercase tracking-wider">Role</th>
+              <th class="text-left px-3 py-2 text-2xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+              <th class="text-left px-3 py-2 text-2xs font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">Last Login</th>
+              <th class="text-right px-3 py-2 text-2xs font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -73,16 +74,16 @@ import { AdminUser } from '../../models';
                       </div>
                       <div>
                         <p class="font-medium text-slate-800">{{ user.display_name }}</p>
-                        <p class="text-[10px] text-slate-400">{{ user.username }}</p>
+                        <p class="text-2xs text-slate-400">{{ user.username }}</p>
                       </div>
                     </div>
                   </td>
                   <td class="px-3 py-2.5 text-slate-500 hidden sm:table-cell">{{ user.email }}</td>
                   <td class="px-3 py-2.5">
-                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary/10 text-primary">{{ getRoleName(user.role_id) }}</span>
+                    <span class="px-1.5 py-0.5 rounded text-2xs font-semibold bg-primary/10 text-primary">{{ getRoleName(user.role_id) }}</span>
                   </td>
                   <td class="px-3 py-2.5">
-                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                    <span class="px-1.5 py-0.5 rounded text-2xs font-semibold"
                           [class]="toBool(user.is_active) ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'">
                       {{ toBool(user.is_active) ? 'Active' : 'Inactive' }}
                     </span>
@@ -109,104 +110,91 @@ import { AdminUser } from '../../models';
         </table>
       </div>
       @if (!loading()) {
-        <p class="text-[10px] text-slate-400">{{ filtered().length }} user{{ filtered().length !== 1 ? 's' : '' }}</p>
+        <p class="text-2xs text-slate-400">{{ filtered().length }} user{{ filtered().length !== 1 ? 's' : '' }}</p>
       }
     </div>
 
-    <!-- Drawer backdrop -->
-    @if (drawerOpen()) {
-      <div class="fixed inset-0 bg-black/40 z-40" (click)="closeDrawer()"></div>
-    }
+    <app-drawer-panel
+      [open]="drawerOpen()"
+      [title]="editingUser() ? 'Edit user' : 'Add user'"
+      subtitle="Account details and role assignment apply on the next sign-in for permission changes."
+      size="sm"
+      (closed)="closeDrawer()"
+      (backdropClose)="closeDrawer()">
+      @if (form) {
+        <form [formGroup]="form" class="space-y-3">
 
-    <!-- Drawer -->
-    <div class="fixed top-0 right-0 h-full w-full max-w-sm bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300"
-         [class.translate-x-full]="!drawerOpen()"
-         [class.translate-x-0]="drawerOpen()">
+          <div>
+            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              Username {{ editingUser() ? '' : '*' }}
+            </label>
+            <input formControlName="username" type="text" placeholder="e.g. john.doe"
+                   class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary"
+                   [readOnly]="!!editingUser()">
+            @if (form.get('username')?.invalid && form.get('username')?.touched) {
+              <p class="text-red-500 text-2xs mt-1">Username is required</p>
+            }
+          </div>
 
-      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 flex-shrink-0">
-        <h2 class="text-sm font-semibold text-slate-900">{{ editingUser() ? 'Edit User' : 'Add User' }}</h2>
-        <button (click)="closeDrawer()" class="p-1.5 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100">
-          <span class="material-symbols-outlined text-[18px]">close</span>
-        </button>
-      </div>
+          <div>
+            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              Password {{ editingUser() ? '(leave blank to keep)' : '*' }}
+            </label>
+            <div class="relative">
+              <input formControlName="password" [type]="showPassword() ? 'text' : 'password'"
+                     placeholder="{{ editingUser() ? 'Leave blank to keep current' : 'Enter password' }}"
+                     class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary pr-8">
+              <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      (click)="showPassword.set(!showPassword())">
+                <span class="material-symbols-outlined text-[16px]">{{ showPassword() ? 'visibility_off' : 'visibility' }}</span>
+              </button>
+            </div>
+          </div>
 
-      <div class="flex-1 overflow-y-auto p-4">
-        @if (form) {
-          <form [formGroup]="form" class="space-y-3">
+          <div>
+            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Display Name *</label>
+            <input formControlName="display_name" type="text" placeholder="e.g. John Doe"
+                   class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary">
+            @if (form.get('display_name')?.invalid && form.get('display_name')?.touched) {
+              <p class="text-red-500 text-2xs mt-1">Display name is required</p>
+            }
+          </div>
 
-            <div>
-              <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                Username {{ editingUser() ? '' : '*' }}
-              </label>
-              <input formControlName="username" type="text" placeholder="e.g. john.doe"
-                     class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary"
-                     [readOnly]="!!editingUser()">
-              @if (form.get('username')?.invalid && form.get('username')?.touched) {
-                <p class="text-red-500 text-[10px] mt-1">Username is required</p>
+          <div>
+            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Email *</label>
+            <input formControlName="email" type="email" placeholder="e.g. john@example.com"
+                   class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary">
+            @if (form.get('email')?.invalid && form.get('email')?.touched) {
+              <p class="text-red-500 text-2xs mt-1">Valid email is required</p>
+            }
+          </div>
+
+          <div>
+            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Role *</label>
+            <select formControlName="role_id"
+                    class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary bg-white">
+              <option value="">Select a role</option>
+              @for (role of masters.roles(); track role.role_id) {
+                <option [value]="role.role_id">{{ role.role_name }}</option>
               }
-            </div>
+            </select>
+            @if (form.get('role_id')?.invalid && form.get('role_id')?.touched) {
+              <p class="text-red-500 text-2xs mt-1">Role is required</p>
+            }
+          </div>
 
-            <div>
-              <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                Password {{ editingUser() ? '(leave blank to keep)' : '*' }}
-              </label>
-              <div class="relative">
-                <input formControlName="password" [type]="showPassword() ? 'text' : 'password'"
-                       placeholder="{{ editingUser() ? 'Leave blank to keep current' : 'Enter password' }}"
-                       class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary pr-8">
-                <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                        (click)="showPassword.set(!showPassword())">
-                  <span class="material-symbols-outlined text-[16px]">{{ showPassword() ? 'visibility_off' : 'visibility' }}</span>
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Display Name *</label>
-              <input formControlName="display_name" type="text" placeholder="e.g. John Doe"
-                     class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary">
-              @if (form.get('display_name')?.invalid && form.get('display_name')?.touched) {
-                <p class="text-red-500 text-[10px] mt-1">Display name is required</p>
-              }
-            </div>
-
-            <div>
-              <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Email *</label>
-              <input formControlName="email" type="email" placeholder="e.g. john@example.com"
-                     class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary">
-              @if (form.get('email')?.invalid && form.get('email')?.touched) {
-                <p class="text-red-500 text-[10px] mt-1">Valid email is required</p>
-              }
-            </div>
-
-            <div>
-              <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Role *</label>
-              <select formControlName="role_id"
-                      class="w-full px-3 py-2 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-primary bg-white">
-                <option value="">Select a role</option>
-                @for (role of masters.roles(); track role.role_id) {
-                  <option [value]="role.role_id">{{ role.role_name }}</option>
-                }
-              </select>
-              @if (form.get('role_id')?.invalid && form.get('role_id')?.touched) {
-                <p class="text-red-500 text-[10px] mt-1">Role is required</p>
-              }
-            </div>
-
-          </form>
-        }
-      </div>
-
-      <div class="px-4 py-3 border-t border-slate-100 flex gap-2 justify-end flex-shrink-0">
-        <button class="px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
+        </form>
+      }
+      <div drawerFooter>
+        <button type="button" class="px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
                 (click)="closeDrawer()">Cancel</button>
-        <button class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-white rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
+        <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-white rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
                 [disabled]="saving()" (click)="save()">
           @if (saving()) { <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span> }
-          {{ editingUser() ? 'Save Changes' : 'Create User' }}
+          {{ editingUser() ? 'Save changes' : 'Create user' }}
         </button>
       </div>
-    </div>
+    </app-drawer-panel>
   `
 })
 export class UsersComponent implements OnInit {

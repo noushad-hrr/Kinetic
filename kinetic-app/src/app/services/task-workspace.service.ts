@@ -18,6 +18,11 @@ export interface TmTaskRow {
   priority: string;
   assignee: string;
   due: string;
+  /** YYYY-MM-DD — Day chart shows the task on this calendar day */
+  dueDate: string;
+  /** Minutes from midnight (timeline start), e.g. 9:30 → 570 */
+  scheduleStartMins: number;
+  scheduleDurationMins: number;
 }
 
 function nextId(prefix: string, existing: string[]): string {
@@ -52,18 +57,18 @@ export class TaskWorkspaceService {
   ]);
 
   readonly tasks = signal<TmTaskRow[]>([
-    { id: 'KT-0031', projectId: 'KP-0001', title: 'Homepage redesign',            status: 'In Progress', priority: 'High',   assignee: 'Alex Sterling',  due: 'Apr 15' },
-    { id: 'KT-0032', projectId: 'KP-0003', title: 'API endpoint integration',     status: 'Open',        priority: 'Medium', assignee: 'Sarah Johnson',  due: 'Apr 18' },
-    { id: 'KT-0028', projectId: 'KP-0005', title: 'Database migration script',    status: 'Overdue',     priority: 'High',   assignee: 'Liam Nguyen',    due: 'Apr 10' },
-    { id: 'KT-0033', projectId: 'KP-0004', title: 'Copy review — landing page',   status: 'Open',        priority: 'Low',    assignee: 'Priya Kumar',    due: 'Apr 22' },
-    { id: 'KT-0030', projectId: 'KP-0002', title: 'Bug fix #231 crash on login',  status: 'In Progress', priority: 'High',   assignee: 'James Hart',     due: 'Apr 14' },
-    { id: 'KT-0034', projectId: 'KP-0001', title: 'Navigation bar responsive',    status: 'Open',        priority: 'Medium', assignee: 'Alex Sterling',  due: 'Apr 20' },
-    { id: 'KT-0035', projectId: 'KP-0003', title: 'Sprint retrospective notes',   status: 'Completed',   priority: 'Low',    assignee: 'Sarah Johnson',  due: 'Apr 12' },
-    { id: 'KT-0036', projectId: 'KP-0004', title: 'Release notes draft',          status: 'Open',        priority: 'Medium', assignee: 'Priya Kumar',    due: 'Apr 17' },
-    { id: 'KT-0019', projectId: 'KP-0002', title: 'QA report submission',         status: 'Overdue',     priority: 'High',   assignee: 'Liam Nguyen',    due: 'Apr 08' },
-    { id: 'KT-0022', projectId: 'KP-0001', title: 'Design handoff to dev',        status: 'Overdue',     priority: 'Medium', assignee: 'Alex Sterling',  due: 'Apr 09' },
-    { id: 'KT-0025', projectId: 'KP-0005', title: 'Setup CI/CD pipeline',         status: 'Triage',      priority: 'High',   assignee: 'James Hart',     due: ''       },
-    { id: 'KT-0027', projectId: 'KP-0002', title: 'User onboarding flow',         status: 'Triage',      priority: 'Medium', assignee: 'Priya Kumar',    due: ''       },
+    { id: 'KT-0031', projectId: 'KP-0001', title: 'Homepage redesign',            status: 'In Progress', priority: 'High',   assignee: 'Alex Sterling',  due: 'Apr 15', dueDate: '2026-04-15', scheduleStartMins: 9 * 60 + 30,  scheduleDurationMins: 90 },
+    { id: 'KT-0032', projectId: 'KP-0003', title: 'API endpoint integration',     status: 'Open',        priority: 'Medium', assignee: 'Sarah Johnson',  due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 11 * 60,       scheduleDurationMins: 60 },
+    { id: 'KT-0028', projectId: 'KP-0005', title: 'Database migration script',    status: 'Overdue',     priority: 'High',   assignee: 'Liam Nguyen',    due: 'Apr 10', dueDate: '2026-04-10', scheduleStartMins: 8 * 60 + 30,   scheduleDurationMins: 45 },
+    { id: 'KT-0033', projectId: 'KP-0004', title: 'Copy review — landing page',   status: 'Open',        priority: 'Low',    assignee: 'Priya Kumar',    due: 'Apr 22', dueDate: '2026-04-22', scheduleStartMins: 14 * 60,       scheduleDurationMins: 40 },
+    { id: 'KT-0030', projectId: 'KP-0002', title: 'Bug fix #231 crash on login',  status: 'In Progress', priority: 'High',   assignee: 'James Hart',     due: 'Apr 14', dueDate: '2026-04-14', scheduleStartMins: 10 * 60,       scheduleDurationMins: 75 },
+    { id: 'KT-0034', projectId: 'KP-0001', title: 'Navigation bar responsive',    status: 'Open',        priority: 'Medium', assignee: 'Alex Sterling',  due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 15 * 60 + 30, scheduleDurationMins: 50 },
+    { id: 'KT-0035', projectId: 'KP-0003', title: 'Sprint retrospective notes',   status: 'Completed',   priority: 'Low',    assignee: 'Sarah Johnson',  due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 10 * 60,       scheduleDurationMins: 40 },
+    { id: 'KT-0036', projectId: 'KP-0004', title: 'Release notes draft',          status: 'Open',        priority: 'Medium', assignee: 'Priya Kumar',    due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 12 * 60,       scheduleDurationMins: 55 },
+    { id: 'KT-0019', projectId: 'KP-0002', title: 'QA report submission',         status: 'Overdue',     priority: 'High',   assignee: 'Liam Nguyen',    due: 'Apr 08', dueDate: '2026-04-08', scheduleStartMins: 9 * 60,        scheduleDurationMins: 50 },
+    { id: 'KT-0022', projectId: 'KP-0001', title: 'Design handoff to dev',        status: 'Overdue',     priority: 'Medium', assignee: 'Alex Sterling',  due: 'Apr 09', dueDate: '2026-04-09', scheduleStartMins: 13 * 60 + 15, scheduleDurationMins: 60 },
+    { id: 'KT-0025', projectId: 'KP-0005', title: 'Setup CI/CD pipeline',         status: 'Triage',      priority: 'High',   assignee: 'James Hart',     due: '',       dueDate: '2026-04-20', scheduleStartMins: 16 * 60,       scheduleDurationMins: 45 },
+    { id: 'KT-0027', projectId: 'KP-0002', title: 'User onboarding flow',         status: 'Triage',      priority: 'Medium', assignee: 'Priya Kumar',    due: '',       dueDate: '2026-04-25', scheduleStartMins: 11 * 60 + 45, scheduleDurationMins: 50 },
   ]);
 
   projectById(id: string): TmProjectRow | undefined {
@@ -92,7 +97,13 @@ export class TaskWorkspaceService {
 
   addTask(row: Omit<TmTaskRow, 'id'>): TmTaskRow {
     const id = nextId('KT', this.tasks().map(t => t.id));
-    const t: TmTaskRow = { id, ...row };
+    const t: TmTaskRow = {
+      id,
+      ...row,
+      dueDate: row.dueDate || new Date().toISOString().slice(0, 10),
+      scheduleStartMins: row.scheduleStartMins ?? 10 * 60,
+      scheduleDurationMins: row.scheduleDurationMins ?? 45,
+    };
     this.tasks.update(list => [...list, t]);
     this.bumpProjectTotals(row.projectId);
     return t;

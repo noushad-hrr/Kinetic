@@ -2,7 +2,7 @@ import { Routes } from '@angular/router';
 import { authGuard, permissionGuard, permissionGuardAny } from './guards/auth.guard';
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
+  { path: '', redirectTo: 'tasks-manager/tasks', pathMatch: 'full' },
   {
     path: 'login',
     loadComponent: () => import('./features/auth/login.component').then(m => m.LoginComponent),
@@ -17,8 +17,13 @@ export const routes: Routes = [
         loadComponent: () => import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent),
       },
 
+      {
+        path: 'settings',
+        loadComponent: () => import('./features/settings/settings.component').then(m => m.SettingsComponent),
+      },
+
       // Tasks Manager
-      { path: 'tasks-manager', redirectTo: 'tasks-manager/projects', pathMatch: 'full' },
+      { path: 'tasks-manager', redirectTo: 'tasks-manager/tasks', pathMatch: 'full' },
       {
         path: 'tasks-manager/projects',
         loadComponent: () => import('./features/tasks-manager/tm-projects.component').then(m => m.TmProjectsComponent),
@@ -40,11 +45,10 @@ export const routes: Routes = [
       },
 
       // Admin
-      { path: 'admin', redirectTo: 'admin/overview', pathMatch: 'full' },
       {
-        path: 'admin/overview',
+        path: 'admin',
         canActivate: [permissionGuardAny('USER_MANAGE', 'ROLE_MANAGE')],
-        loadComponent: () => import('./features/admin/admin-overview.component').then(m => m.AdminOverviewComponent),
+        loadComponent: () => import('./features/admin/admin-redirect.component').then(m => m.AdminRedirectComponent),
       },
       {
         path: 'admin/users',
@@ -58,5 +62,5 @@ export const routes: Routes = [
       },
     ]
   },
-  { path: '**', redirectTo: 'dashboard' }
+  { path: '**', redirectTo: 'tasks-manager/tasks' }
 ];

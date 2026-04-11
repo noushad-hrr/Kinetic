@@ -1,0 +1,52 @@
+/* Global styles.css applies a 150ms opacity transition on all elements; opt out so keyframes are visible. */
+:host {
+  display: contents;
+}
+
+.k-loader-brand {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 0.875rem;
+  background: linear-gradient(145deg, #3d2ed4 0%, #3525cd 45%, #2a1fa8 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset,
+    0 10px 28px rgba(53, 37, 205, 0.35);
+}
+
+.k-loader-bolt {
+  font-size: 2rem;
+  line-height: 1;
+  color: #ffffff;
+  font-variation-settings: 'FILL' 1, 'wght' 600;
+  opacity: 0.32;
+  transition: none;
+  animation: k-loader-bolt-blink 0.95s ease-in-out infinite;
+}
+
+@keyframes k-loader-bolt-blink {
+  0%, 28%, 100% {
+    opacity: 0.32;
+  }
+  34% {
+    opacity: 1;
+  }
+  40% {
+    opacity: 0.32;
+  }
+  52% {
+    opacity: 1;
+  }
+  58% {
+    opacity: 0.32;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .k-loader-bolt {
+    animation: none;
+    opacity: 1;
+  }
+}
