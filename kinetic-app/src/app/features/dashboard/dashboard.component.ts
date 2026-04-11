@@ -134,7 +134,7 @@ import { CommonModule } from '@angular/common';
 })
 export class DashboardComponent {
   stats = [
-    { label: 'Projects',    value: 12, icon: 'folder_open',    iconBg: 'bg-blue-50',   iconColor: 'text-blue-500'  },
+    { label: 'Projects',    value: 12, icon: 'folder_open',    iconBg: 'bg-primary/10', iconColor: 'text-primary' },
     { label: 'Open Tasks',  value: 34, icon: 'circle',         iconBg: 'bg-slate-100', iconColor: 'text-slate-500' },
     { label: 'In Progress', value: 8,  icon: 'autorenew',      iconBg: 'bg-amber-50',  iconColor: 'text-amber-500' },
     { label: 'Overdue',     value: 3,  icon: 'warning',        iconBg: 'bg-red-50',    iconColor: 'text-red-500'   },
@@ -171,7 +171,7 @@ export class DashboardComponent {
   ];
 
   statusClass(s: string): string {
-    return { 'In Progress': 'bg-amber-100 text-amber-700', 'Open': 'bg-blue-100 text-blue-700',
+    return { 'In Progress': 'bg-amber-100 text-amber-700', 'Open': 'bg-primary/10 text-primary',
              'Overdue': 'bg-red-100 text-red-700', 'Completed': 'bg-green-100 text-green-700' }[s] ?? 'bg-slate-100 text-slate-600';
   }
 

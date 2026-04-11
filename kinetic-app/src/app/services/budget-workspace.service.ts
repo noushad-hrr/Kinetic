@@ -16,7 +16,7 @@ export interface BmBudgetLine {
   status: string;
 }
 
-const DOTS = ['bg-blue-400', 'bg-purple-400', 'bg-amber-400', 'bg-green-400', 'bg-teal-400', 'bg-red-400', 'bg-slate-400', 'bg-indigo-400'];
+const DOTS = ['bg-primary', 'bg-amber-500', 'bg-emerald-500', 'bg-teal-500', 'bg-red-400', 'bg-stone-400', 'bg-orange-400', 'bg-rose-400'];
 
 function nextLineId(existing: string[]): string {
   const nums = existing.map(id => {

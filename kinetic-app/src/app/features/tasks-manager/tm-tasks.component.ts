@@ -7,9 +7,9 @@ import { TaskWorkspaceService, TmTaskRow } from '../../services/task-workspace.s
 import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.component';
 import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialog.component';
 
-/** 6:00 → 22:00 */
-const DAY_START_MINS = 6 * 60;
-const DAY_END_MINS = 22 * 60;
+/** Full day: midnight → end of day (24h timeline) */
+const DAY_START_MINS = 0;
+const DAY_END_MINS = 24 * 60;
 const DAY_RANGE_MINS = DAY_END_MINS - DAY_START_MINS;
 
 export interface DayChartBlock {
@@ -31,7 +31,7 @@ export interface DayChartBlock {
         <div class="min-w-0">
           <h1 class="text-sm font-semibold text-slate-900 tracking-tight">Tasks</h1>
           <p class="text-xs text-slate-500 mt-0.5">
-            <span class="font-medium text-slate-700">Day chart</span> is your focused timeline; switch to list for dense tables. Scoped by project when you arrive from Projects.
+            <span class="font-medium text-slate-700">Day chart</span> shows the full 24-hour day; switch to list for dense tables. Scoped by project when you arrive from Projects.
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -104,7 +104,7 @@ export interface DayChartBlock {
       </div>
 
       @if (viewMode() === 'day') {
-        <div class="rounded-xl border border-slate-200 dark:border-[#3c3c3c] bg-white dark:bg-[#252526] shadow-sm overflow-hidden flex flex-col min-h-[min(70vh,820px)]">
+        <div class="rounded-xl border border-slate-200 dark:border-[#3c3c3c] bg-white dark:bg-[#252526] shadow-sm overflow-hidden flex flex-col min-h-[min(55vh,640px)] max-h-[min(92vh,1240px)]">
           <div class="px-3 py-2 border-b border-slate-100 dark:border-[#3c3c3c] flex items-center justify-between gap-2 bg-slate-50/80 dark:bg-[#1e1e1e]">
             <div class="flex items-center gap-2 min-w-0">
               <span class="material-symbols-outlined text-[18px] text-slate-500 dark:text-neutral-500">schedule</span>
@@ -118,12 +118,13 @@ export interface DayChartBlock {
             </button>
           </div>
           <div class="flex flex-1 min-h-0 overflow-auto">
-            <div class="w-12 sm:w-14 flex-shrink-0 border-r border-slate-100 dark:border-[#3c3c3c] bg-slate-50/50 dark:bg-[#1e1e1e] text-right pr-2 pt-1 select-none">
+            <div class="w-[3.25rem] sm:w-14 flex-shrink-0 border-r border-slate-100 dark:border-[#3c3c3c] bg-slate-50/50 dark:bg-[#1e1e1e] text-right pr-1.5 sm:pr-2 pt-0.5 select-none">
               @for (h of hourLabels; track h) {
-                <div class="h-12 text-[10px] font-medium text-slate-400 dark:text-neutral-500 leading-none pt-0.5 tabular-nums">{{ formatHour(h) }}</div>
+                <div class="text-[9px] sm:text-[10px] font-medium text-slate-400 dark:text-neutral-500 leading-tight tabular-nums flex items-start justify-end pt-0.5"
+                     [style.height.px]="hourSlotPx">{{ formatHour(h) }}</div>
               }
             </div>
-            <div class="flex-1 relative min-w-0" [style.min-height.px]="hourLabels.length * 48">
+            <div class="flex-1 relative min-w-0" [style.min-height.px]="hourLabels.length * hourSlotPx">
               @for (h of hourLabels; track h; let i = $index) {
                 <div class="absolute left-0 right-0 border-t border-slate-100 dark:border-[#2d2d2d] pointer-events-none z-0"
                      [style.top.%]="hourTopPct(i)"></div>
@@ -375,8 +376,9 @@ export class TmTasksComponent implements OnInit, OnDestroy {
   selectedDay = signal(this.todayYmd());
   statusTabs = ['All', 'Open', 'In Progress', 'Overdue', 'Completed', 'Triage'];
 
-  /** Hours 6–21 (rows up to 22:00) */
-  readonly hourLabels = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+  /** 0–23 → full 24h; row height keeps chart scrollable inside the panel */
+  readonly hourLabels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
+  readonly hourSlotPx = 42;
 
   taskModalOpen = signal(false);
   editingTask = signal<TmTaskRow | null>(null);
@@ -451,9 +453,10 @@ export class TmTasksComponent implements OnInit, OnDestroy {
   }
 
   formatHour(h: number): string {
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const x = h % 12 || 12;
-    return `${x} ${ampm}`;
+    if (h === 0) return '12a';
+    if (h < 12) return `${h}a`;
+    if (h === 12) return '12p';
+    return `${h - 12}p`;
   }
 
   prettyDayLabel(): string {

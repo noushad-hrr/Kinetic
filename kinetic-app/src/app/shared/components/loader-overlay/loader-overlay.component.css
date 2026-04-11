@@ -7,13 +7,20 @@
   width: 4rem;
   height: 4rem;
   border-radius: 0.875rem;
-  background: linear-gradient(145deg, #3d2ed4 0%, #3525cd 45%, #2a1fa8 100%);
+  background: linear-gradient(145deg, #a85545 0%, #8f4334 48%, #6d3228 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.14) inset,
-    0 10px 28px rgba(53, 37, 205, 0.35);
+    0 10px 28px rgba(111, 50, 40, 0.28);
+}
+
+:host-context(html.dark) .k-loader-brand {
+  background: linear-gradient(145deg, #4a4a4a 0%, #3e3e42 48%, #2d2d30 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 10px 28px rgba(0, 0, 0, 0.4);
 }
 
 .k-loader-bolt {
