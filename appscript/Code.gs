@@ -1,6 +1,10 @@
 /**
  * KINETIC - Google Apps Script API Layer
  * Deploy as Web App: Execute as Me, Anyone can access
+ * 
+ * UPDATED: Added RBAC (Role-Based Access Control) functions
+ * - New sheets: permissions, role_permission_mapping, user_project_mapping
+ * - Renamed: user_project_permissions → user_project_mapping (simplified)
  */
 
 // ─── CORS & RESPONSE HELPERS ─────────────────────────────────────────────────
@@ -50,7 +54,7 @@ function doGet(e) {
     }
 
     // For login: also accept username/password as direct URL params (most reliable)
-    if (action === 'login') {
+    if (action === 'login' || action === 'loginWithRBAC') {
       if (params.username) body.username = params.username;
       if (params.password) body.password = params.password;
     }
@@ -82,41 +86,64 @@ function doPost(e) {
 function route(action, params, body) {
   switch (action) {
     // Auth
-    case 'login':             return handleLogin(body);
-    case 'getUserPermissions': return handleGetUserPermissions(params.user_id);
+    case 'login':                    return handleLogin(body);
+    case 'loginWithRBAC':           return handleLoginWithRBAC(body);
+    case 'getUserPermissions':       return handleGetUserPermissions(params.user_id);
+
+    // NEW: RBAC - Roles Management
+    case 'getRoles':                 return handleGetRoles();
+    case 'createRole':               return handleCreateRole(body);
+    case 'updateRole':               return handleUpdateRole(params.role_id, body);
+    case 'deleteRole':               return handleDeleteRole(params.role_id);
+
+    // NEW: RBAC - Permissions
+    case 'getPermissions':           return handleGetPermissions();
+    case 'getRolePermissions':       return handleGetRolePermissions(params.role_id);
+    case 'updateRolePermissions':    return handleUpdateRolePermissions(params.role_id, body.permissions);
+
+    // NEW: RBAC - User Management
+    case 'getUsers':                 return handleGetUsers();
+    case 'createUser':               return handleCreateUser(body);
+    case 'updateUser':               return handleUpdateUser(body);
+    case 'deleteUser':               return handleDeleteUser(params.user_id);
+
+    // NEW: RBAC - User Project Assignment
+    case 'getUserProjects':          return handleGetUserProjects(params.user_id);
+    case 'assignUserToProject':      return handleAssignUserToProject(body);
+    case 'removeUserFromProject':    return handleRemoveUserFromProject(params.mapping_id);
 
     // Masters
-    case 'getMasters':        return handleGetMasters();
+    case 'getMasters':               return handleGetMasters();
 
     // Dashboard
-    case 'getDashboard':      return handleGetDashboard(params.user_id);
+    case 'getDashboard':             return handleGetDashboard(params.user_id);
 
     // Projects
-    case 'getProjects':       return handleGetProjects(params.user_id);
-    case 'createProject':     return handleCreateProject(body);
-    case 'updateProject':     return handleUpdateProject(body);
-    case 'deleteProject':     return handleDeleteProject(params.project_id, params.user_id);
+    case 'getProjects':              return handleGetProjects(params.user_id);
+    case 'createProject':            return handleCreateProject(body);
+    case 'updateProject':            return handleUpdateProject(body);
+    case 'deleteProject':            return handleDeleteProject(params.project_id, params.user_id);
 
     // Project Artifacts
-    case 'getArtifacts':           return handleGetArtifacts(params.project_id);
-    case 'createArtifact':         return handleCreateArtifact(body);
-    case 'updateArtifact':         return handleUpdateArtifact(body);
-    case 'deleteArtifact':         return handleDeleteArtifact(params.artifact_id);
+    case 'getArtifacts':             return handleGetArtifacts(params.project_id);
+    case 'createArtifact':           return handleCreateArtifact(body);
+    case 'updateArtifact':           return handleUpdateArtifact(body);
+    case 'deleteArtifact':           return handleDeleteArtifact(params.artifact_id);
 
     // Task Artifacts
-    case 'getTaskArtifacts':       return handleGetTaskArtifacts(params.task_id);
-    case 'createTaskArtifact':     return handleCreateTaskArtifact(body);
-    case 'updateTaskArtifact':     return handleUpdateTaskArtifact(body);
-    case 'deleteTaskArtifact':     return handleDeleteTaskArtifact(params.task_artifact_id);
+    case 'getTaskArtifacts':         return handleGetTaskArtifacts(params.task_id);
+    case 'createTaskArtifact':       return handleCreateTaskArtifact(body);
+    case 'updateTaskArtifact':       return handleUpdateTaskArtifact(body);
+    case 'deleteTaskArtifact':       return handleDeleteTaskArtifact(params.task_artifact_id);
 
     // Tasks
-    case 'getTasks':          return handleGetTasks(params.user_id, params.project_ids);
-    case 'createTask':        return handleCreateTask(body);
-    case 'updateTask':        return handleUpdateTask(body);
-    case 'deleteTask':        return handleDeleteTask(params.task_id);
+    case 'getTasks':                 return handleGetTasks(params.user_id, params.project_ids);
+    case 'createTask':               return handleCreateTask(body);
+    case 'updateTask':               return handleUpdateTask(body);
+    case 'deleteTask':               return handleDeleteTask(params.task_id);
 
     // Utility
-    case 'autoCloseOverdue':  return handleAutoCloseOverdue();
+    case 'autoCloseOverdue':         return handleAutoCloseOverdue();
 
     default:
       return error('Unknown action: ' + action, 404);
@@ -338,6 +365,7 @@ function now() {
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 
+// LEGACY: Keep for backward compatibility
 function handleLogin(body) {
   if (!body || !body.username || !body.password) {
     return error('Username and password are required', 400);
@@ -368,11 +396,377 @@ function handleLogin(body) {
   return success({ user: sessionUser });
 }
 
+// NEW: RBAC Login - Returns user + permissions + projects
+function handleLoginWithRBAC(body) {
+  if (!body || !body.username || !body.password) {
+    return error('Username and password are required', 400);
+  }
+
+  var users = sheetToObjects('users');
+  var user = users.find(function(u) {
+    return String(u.username).toLowerCase() === String(body.username).toLowerCase()
+      && String(u.password_hash) === String(body.password);
+  });
+
+  if (!user) return error('Invalid username or password', 401);
+  if (String(user.is_active).toUpperCase() !== 'TRUE') {
+    return error('Your account is inactive. Please contact admin.', 403);
+  }
+
+  // Get role name
+  var roles = sheetToObjects('roles');
+  var role = roles.find(function(r) { return r.role_id === user.role_id; });
+  
+  // Update last_login_on
+  updateRowById('users', 'user_id', user.user_id, { last_login_on: now() });
+
+  var sessionUser = {
+    user_id: user.user_id,
+    username: user.username,
+    display_name: user.display_name,
+    email: user.email,
+    role_id: user.role_id,
+    role_name: role ? role.role_name : ''
+  };
+
+  // Get permissions for this role
+  var permissions = getRolePermissionsData(user.role_id);
+  var permissionCodes = permissions.map(function(p) { return p.permission_code; }).filter(Boolean);
+
+  // Get user's project assignments
+  var projects = getUserProjectsData(user.user_id);
+
+  return success({
+    user: sessionUser,
+    permissions: permissionCodes,
+    projects: projects
+  });
+}
+
+// Helper: Get permissions for a role
+function getRolePermissionsData(roleId) {
+  var mapping = sheetToObjects('role_permission_mapping');
+  var perms = sheetToObjects('permissions');
+  
+  var permIds = mapping
+    .filter(function(m) { return m.role_id_fk === roleId; })
+    .map(function(m) { return m.permission_id_fk; });
+  
+  return perms.filter(function(p) { return permIds.indexOf(p.permission_id) !== -1; });
+}
+
+// Helper: Get projects for a user
+function getUserProjectsData(userId) {
+  var mappings = sheetToObjects('user_project_mapping');
+  return mappings.filter(function(m) {
+    return String(m.user_id_fk) === String(userId) && String(m.is_active).toUpperCase() === 'TRUE';
+  });
+}
+
+// Check if user has a specific permission
+function userHasPermission(userId, permissionCode) {
+  var users = sheetToObjects('users');
+  var user = users.find(function(u) { return u.user_id === userId; });
+  if (!user) return false;
+  
+  var perms = getRolePermissionsData(user.role_id);
+  return perms.some(function(p) { return p.permission_code === permissionCode; });
+}
+
+// Check if user can view all projects
+function canViewAllProjects(userId) {
+  return userHasPermission(userId, 'VIEW_ALL_PROJECTS');
+}
+
+// Returns user project permissions derived from user_project_mapping
 function handleGetUserPermissions(userId) {
   if (!userId) return error('user_id required', 400);
-  var perms = sheetToObjects('user_project_permissions');
-  var userPerms = perms.filter(function(p) { return String(p.user_id_fk) === String(userId); });
-  return success(userPerms);
+  var mappings = sheetToObjects('user_project_mapping');
+  var userMappings = mappings.filter(function(m) {
+    return String(m.user_id_fk) === String(userId) && String(m.is_active).toUpperCase() === 'TRUE';
+  });
+  // Derive can_read/can_create/can_update/can_delete from is_active for compatibility
+  var perms = userMappings.map(function(m) {
+    return {
+      mapping_id: m.mapping_id,
+      user_id_fk: m.user_id_fk,
+      project_id_fk: m.project_id_fk,
+      can_read: true,
+      can_create: true,
+      can_update: true,
+      can_delete: true
+    };
+  });
+  return success(perms);
+}
+
+// ─── RBAC: ROLES MANAGEMENT ─────────────────────────────────────────────────
+
+function handleGetRoles() {
+  var roles = sheetToObjects('roles').filter(function(r) {
+    return String(r.is_deleted).toUpperCase() !== 'TRUE';
+  });
+  return success(roles);
+}
+
+function handleCreateRole(body) {
+  if (!body.role_name) {
+    return error('role_name is required', 400);
+  }
+
+  var newRole = {
+    role_id: generateId('R', 'roles', 'role_id'),
+    role_name: body.role_name,
+    role_description: body.role_description || '',
+    is_active: body.is_active !== undefined ? body.is_active : true,
+    is_deleted: false,
+    created_by: body.created_by,
+    created_on: now()
+  };
+
+  appendRow('roles', newRole);
+  return success(newRole);
+}
+
+function handleUpdateRole(roleId, body) {
+  if (!roleId) return error('role_id required', 400);
+  
+  var updateObj = {};
+  if (body.role_name !== undefined) updateObj.role_name = body.role_name;
+  if (body.role_description !== undefined) updateObj.role_description = body.role_description;
+  if (body.is_active !== undefined) updateObj.is_active = body.is_active;
+  
+  var updated = updateRowById('roles', 'role_id', roleId, updateObj);
+  if (!updated) return error('Role not found', 404);
+  return success({ message: 'Role updated' });
+}
+
+function handleDeleteRole(roleId) {
+  if (!roleId) return error('role_id required', 400);
+  
+  // Soft delete: mark as deleted and inactive
+  var updated = updateRowById('roles', 'role_id', roleId, { 
+    is_deleted: true, 
+    is_active: false 
+  });
+  if (!updated) return error('Role not found', 404);
+  return success({ message: 'Role deleted' });
+}
+
+// ─── RBAC: PERMISSIONS ───────────────────────────────────────────────────────
+
+function handleGetPermissions() {
+  var perms = sheetToObjects('permissions');
+  return success(perms);
+}
+
+function handleGetRolePermissions(roleId) {
+  if (!roleId) return error('role_id required', 400);
+  
+  var mapping = sheetToObjects('role_permission_mapping');
+  var perms = sheetToObjects('permissions');
+  
+  var rolePerms = mapping.filter(function(m) { return m.role_id_fk === roleId; });
+  
+  // Enrich with permission details
+  var result = rolePerms.map(function(m) {
+    var perm = perms.find(function(p) { return p.permission_id === m.permission_id_fk; });
+    return {
+      mapping_id: m.mapping_id,
+      role_id_fk: m.role_id_fk,
+      permission_id_fk: m.permission_id_fk,
+      permission_code: perm ? perm.permission_code : null
+    };
+  });
+  
+  return success(result);
+}
+
+function handleUpdateRolePermissions(roleId, permissions) {
+  if (!roleId) return error('role_id required', 400);
+  if (!permissions || !Array.isArray(permissions)) {
+    return error('permissions array is required', 400);
+  }
+  
+  var allPerms = sheetToObjects('permissions');
+  var mappingSheet = getSheet('role_permission_mapping');
+  var mappingData = mappingSheet.getDataRange().getValues();
+  var headers = mappingData[0].map(function(h) { return String(h).trim(); });
+  
+  // Get permission ID mapping
+  var permIdMap = {};
+  allPerms.forEach(function(p) {
+    permIdMap[p.permission_code] = p.permission_id;
+  });
+  
+  // Find and delete existing mappings for this role
+  var rowsToDelete = [];
+  for (var i = mappingData.length - 1; i >= 1; i--) {
+    if (String(mappingData[i][1]) === String(roleId)) { // role_id_fk is column 2
+      rowsToDelete.push(i + 1);
+    }
+  }
+  
+  // Delete from bottom to top to avoid index shifting
+  rowsToDelete.forEach(function(rowIdx) {
+    mappingSheet.deleteRow(rowIdx);
+  });
+  
+  // Add new mappings
+  permissions.forEach(function(permCode) {
+    var permId = permIdMap[permCode];
+    if (permId) {
+      var newId = generateId('M', 'role_permission_mapping', 'mapping_id');
+      appendRow('role_permission_mapping', {
+        mapping_id: newId,
+        role_id_fk: roleId,
+        permission_id_fk: permId
+      });
+    }
+  });
+  
+  return success({ message: 'Role permissions updated' });
+}
+
+// ─── RBAC: USER MANAGEMENT ────────────────────────────────────────────────────
+
+function handleGetUsers() {
+  var users = sheetToObjects('users').filter(function(u) {
+    return String(u.is_active).toUpperCase() === 'TRUE';
+  });
+  
+  // Don't return password_hash
+  var result = users.map(function(u) {
+    return {
+      user_id: u.user_id,
+      username: u.username,
+      display_name: u.display_name,
+      email: u.email,
+      role_id: u.role_id,
+      is_active: u.is_active,
+      created_on: u.created_on,
+      last_login_on: u.last_login_on
+    };
+  });
+  
+  return success(result);
+}
+
+function handleCreateUser(body) {
+  if (!body.username || !body.password || !body.display_name || !body.email || !body.role_id) {
+    return error('username, password, display_name, email, and role_id are required', 400);
+  }
+
+  // Check if username exists
+  var existing = sheetToObjects('users').find(function(u) {
+    return u.username === body.username;
+  });
+  if (existing) return error('Username already exists', 409);
+
+  var newUser = {
+    user_id: generateId('U', 'users', 'user_id'),
+    username: body.username,
+    password_hash: body.password,
+    display_name: body.display_name,
+    email: body.email,
+    role_id: body.role_id,
+    is_active: body.is_active !== undefined ? body.is_active : true,
+    created_on: now(),
+    last_login_on: ''
+  };
+
+  appendRow('users', newUser);
+  
+  // Return without password
+  return success({
+    user_id: newUser.user_id,
+    username: newUser.username,
+    display_name: newUser.display_name,
+    email: newUser.email,
+    role_id: newUser.role_id,
+    is_active: newUser.is_active,
+    created_on: newUser.created_on
+  });
+}
+
+function handleUpdateUser(body) {
+  if (!body.user_id) return error('user_id required', 400);
+  
+  var updateObj = {};
+  if (body.username !== undefined) updateObj.username = body.username;
+  if (body.display_name !== undefined) updateObj.display_name = body.display_name;
+  if (body.email !== undefined) updateObj.email = body.email;
+  if (body.role_id !== undefined) updateObj.role_id = body.role_id;
+  if (body.is_active !== undefined) updateObj.is_active = body.is_active;
+  if (body.password !== undefined) updateObj.password_hash = body.password;
+  
+  var updated = updateRowById('users', 'user_id', body.user_id, updateObj);
+  if (!updated) return error('User not found', 404);
+  return success({ message: 'User updated' });
+}
+
+function handleDeleteUser(userId) {
+  if (!userId) return error('user_id required', 400);
+  
+  // Soft delete: mark as inactive
+  var updated = updateRowById('users', 'user_id', userId, { is_active: false });
+  if (!updated) return error('User not found', 404);
+  return success({ message: 'User deleted' });
+}
+
+// ─── RBAC: USER PROJECT ASSIGNMENT ───────────────────────────────────────────
+
+function handleGetUserProjects(userId) {
+  if (!userId) return error('user_id required', 400);
+  
+  var mappings = sheetToObjects('user_project_mapping').filter(function(m) {
+    return String(m.user_id_fk) === String(userId) && String(m.is_active).toUpperCase() === 'TRUE';
+  });
+  
+  return success(mappings);
+}
+
+function handleAssignUserToProject(body) {
+  if (!body.user_id || !body.project_id) {
+    return error('user_id and project_id are required', 400);
+  }
+
+  // Check if mapping already exists
+  var mappings = sheetToObjects('user_project_mapping');
+  var existing = mappings.find(function(m) {
+    return m.user_id_fk === body.user_id && m.project_id_fk === body.project_id;
+  });
+
+  if (existing) {
+    // Reactivate if exists
+    updateRowById('user_project_mapping', 'mapping_id', existing.mapping_id, { is_active: true });
+    return success({
+      mapping_id: existing.mapping_id,
+      user_id_fk: body.user_id,
+      project_id_fk: body.project_id,
+      is_active: true
+    });
+  }
+
+  // Create new mapping
+  var newMapping = {
+    mapping_id: generateId('UP', 'user_project_mapping', 'mapping_id'),
+    user_id_fk: body.user_id,
+    project_id_fk: body.project_id,
+    is_active: true
+  };
+
+  appendRow('user_project_mapping', newMapping);
+  return success(newMapping);
+}
+
+function handleRemoveUserFromProject(mappingId) {
+  if (!mappingId) return error('mapping_id required', 400);
+  
+  // Soft delete: mark as inactive
+  var updated = updateRowById('user_project_mapping', 'mapping_id', mappingId, { is_active: false });
+  if (!updated) return error('Mapping not found', 404);
+  return success({ message: 'User removed from project' });
 }
 
 // ─── MASTERS ─────────────────────────────────────────────────────────────────
@@ -381,8 +775,12 @@ function handleGetMasters() {
   var statuses = sheetToObjects('status_master');
   var priorities = sheetToObjects('priority_master');
   var taskTypes = sheetToObjects('task_type_master');
-  var roles = sheetToObjects('roles');
-  var users = sheetToObjects('users').map(function(u) {
+  var roles = sheetToObjects('roles').filter(function(r) {
+    return String(r.is_deleted).toUpperCase() !== 'TRUE';
+  });
+  var users = sheetToObjects('users').filter(function(u) {
+    return String(u.is_active).toUpperCase() === 'TRUE';
+  }).map(function(u) {
     return { user_id: u.user_id, display_name: u.display_name, username: u.username, email: u.email };
   });
 
@@ -394,17 +792,23 @@ function handleGetMasters() {
 function handleGetDashboard(userId) {
   if (!userId) return error('user_id required', 400);
 
-  var perms = sheetToObjects('user_project_permissions');
-  var accessibleProjectIds = perms
-    .filter(function(p) { return String(p.user_id_fk) === String(userId) && String(p.can_read).toUpperCase() === 'TRUE'; })
-    .map(function(p) { return String(p.project_id_fk); });
+  // Get user's accessible projects
+  var userProjects = getUserProjectsData(userId);
+  var accessibleProjectIds = userProjects.map(function(p) { return p.project_id_fk; });
 
-  var projects = sheetToObjects('projects').filter(function(p) {
+  // If user has VIEW_ALL_PROJECTS permission, get all projects
+  var viewAll = canViewAllProjects(userId);
+
+  var allProjects = sheetToObjects('projects');
+  var projects = viewAll ? allProjects : allProjects.filter(function(p) {
     return accessibleProjectIds.indexOf(String(p.project_id)) !== -1;
   });
 
-  var tasks = sheetToObjects('tasks').filter(function(t) {
-    return accessibleProjectIds.indexOf(String(t.project_id_fk)) !== -1;
+  var projectIds = projects.map(function(p) { return p.project_id; });
+
+  var allTasks = sheetToObjects('tasks');
+  var tasks = allTasks.filter(function(t) {
+    return projectIds.indexOf(String(t.project_id_fk)) !== -1;
   });
 
   var today = now();
@@ -476,13 +880,16 @@ function handleGetDashboard(userId) {
 function handleGetProjects(userId) {
   if (!userId) return error('user_id required', 400);
 
-  var perms = sheetToObjects('user_project_permissions');
-  var accessibleIds = perms
-    .filter(function(p) { return String(p.user_id_fk) === String(userId) && String(p.can_read).toUpperCase() === 'TRUE'; })
-    .map(function(p) { return String(p.project_id_fk); });
+  // Check if user can view all projects
+  var viewAll = canViewAllProjects(userId);
 
-  var projects = sheetToObjects('projects').filter(function(p) {
-    return accessibleIds.indexOf(String(p.project_id)) !== -1;
+  // Get user's accessible projects
+  var userProjects = getUserProjectsData(userId);
+  var accessibleProjectIds = userProjects.map(function(p) { return p.project_id_fk; });
+
+  var allProjects = sheetToObjects('projects');
+  var projects = viewAll ? allProjects : allProjects.filter(function(p) {
+    return accessibleProjectIds.indexOf(String(p.project_id)) !== -1;
   });
 
   return success(projects);
@@ -511,18 +918,16 @@ function handleCreateProject(body) {
 
   appendRow('projects', newProject);
 
-  // Auto-grant full permissions to the creator so the project appears immediately
+  // Auto-grant project access to the creator via user_project_mapping
   if (body.created_by) {
-    var mappingId = generateId('M', 'user_project_permissions', 'mapping_id');
-    appendRow('user_project_permissions', {
+    var mappingId = generateId('UP', 'user_project_mapping', 'mapping_id');
+    appendRow('user_project_mapping', {
       mapping_id: mappingId,
       user_id_fk: body.created_by,
       project_id_fk: newProject.project_id,
-      can_read: true,
-      can_create: true,
-      can_update: true,
-      can_delete: true
+      is_active: true
     });
+    
   }
 
   return success(newProject);
@@ -545,10 +950,12 @@ function handleDeleteProject(projectId, userId) {
   var deleted = deleteRowById('projects', 'project_id', projectId);
   if (!deleted) return error('Project not found', 404);
 
-  // Cascade: delete all tasks, artifacts, and permissions for this project
+  // Cascade: delete all tasks, task artifacts, project artifacts, and mappings for this project
+  var projectTasks = sheetToObjects('tasks').filter(function(t) { return String(t.project_id_fk) === String(projectId); });
+  projectTasks.forEach(function(t) { deleteRowsWhere('task_artifacts', 'task_id_fk', t.task_id); });
   deleteRowsWhere('tasks', 'project_id_fk', projectId);
   deleteRowsWhere('project_artifacts', 'project_id_fk', projectId);
-  deleteRowsWhere('user_project_permissions', 'project_id_fk', projectId);
+  deleteRowsWhere('user_project_mapping', 'project_id_fk', projectId);
 
   // Re-sequence task order IDs after bulk deletion
   recompactAllTaskOrderIds();
@@ -649,20 +1056,24 @@ function handleDeleteTaskArtifact(artifactId) {
 function handleGetTasks(userId, projectIdsParam) {
   if (!userId) return error('user_id required', 400);
 
-  var perms = sheetToObjects('user_project_permissions');
-  var accessibleIds = perms
-    .filter(function(p) { return String(p.user_id_fk) === String(userId) && String(p.can_read).toUpperCase() === 'TRUE'; })
-    .map(function(p) { return String(p.project_id_fk); });
+  // Check if user can view all projects
+  var viewAll = canViewAllProjects(userId);
 
-  var filterIds = accessibleIds;
+  var userProjects = getUserProjectsData(userId);
+  var accessibleIds = userProjects.map(function(p) { return p.project_id_fk; });
+
+  var filterIds = viewAll ? null : accessibleIds;
   if (projectIdsParam) {
     var requestedIds = String(projectIdsParam).split(',').map(function(s) { return s.trim(); });
-    filterIds = requestedIds.filter(function(id) { return accessibleIds.indexOf(id) !== -1; });
+    filterIds = requestedIds.filter(function(id) { 
+      return viewAll || accessibleIds.indexOf(id) !== -1; 
+    });
   }
 
-  var tasks = sheetToObjects('tasks').filter(function(t) {
+  var allTasks = sheetToObjects('tasks');
+  var tasks = filterIds ? allTasks.filter(function(t) {
     return filterIds.indexOf(String(t.project_id_fk)) !== -1;
-  });
+  }) : allTasks;
 
   return success(tasks);
 }
@@ -752,6 +1163,9 @@ function handleDeleteTask(taskId) {
 
   var deleted = deleteRowById('tasks', 'task_id', taskId);
   if (!deleted) return error('Task not found', 404);
+
+  // Cascade: delete task artifacts
+  deleteRowsWhere('task_artifacts', 'task_id_fk', taskId);
 
   // Close the gap in the order sequence
   if (!isNaN(deletedOrder)) {
