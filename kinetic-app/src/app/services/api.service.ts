@@ -4,8 +4,8 @@ import { Observable, throwError } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import {
-  ApiResponse, SessionUser, UserProjectPermission, Masters,
-  Project, ProjectArtifact, TaskArtifact, Task, DashboardData, ProjectFormData
+  ApiResponse, SessionUser, Masters,
+  Role, Permission, AdminUser
 } from '../models';
 
 @Injectable({ providedIn: 'root' })
@@ -21,14 +21,12 @@ export class ApiService {
   private call<T>(action: string, params: Record<string, string> = {}, body?: unknown): Observable<T> {
     let httpParams = new HttpParams().set('action', action);
 
-    // Add simple query params
     Object.keys(params).forEach(k => {
       if (params[k] !== undefined && params[k] !== null && params[k] !== '') {
         httpParams = httpParams.set(k, params[k]);
       }
     });
 
-    // Pass body as JSON string — HttpParams encodes it automatically
     if (body) {
       httpParams = httpParams.set('data', JSON.stringify(body));
     }
@@ -48,97 +46,66 @@ export class ApiService {
   // ─── Auth ────────────────────────────────────────────────────────────────────
 
   login(username: string, password: string) {
-    // Pass as direct URL params — most reliable for GAS, avoids JSON parsing issues
-    return this.call<{ user: SessionUser }>('login', { username, password });
+    return this.call<{ user: SessionUser; permissions: string[] }>(
+      'loginWithRBAC', { username, password }
+    );
   }
 
-  getUserPermissions(userId: string) {
-    return this.call<UserProjectPermission[]>('getUserPermissions', { user_id: userId });
+  // ─── Admin: Roles ─────────────────────────────────────────────────────────────
+
+  getRoles() {
+    return this.call<Role[]>('getRoles');
+  }
+
+  createRole(data: { role_name: string; role_description?: string; created_by: string }) {
+    return this.call<Role>('createRole', {}, data);
+  }
+
+  updateRole(roleId: string, data: Partial<Role>) {
+    return this.call<{ message: string }>('updateRole', { role_id: roleId }, data);
+  }
+
+  deleteRole(roleId: string) {
+    return this.call<{ message: string }>('deleteRole', { role_id: roleId });
+  }
+
+  // ─── Admin: Permissions ───────────────────────────────────────────────────────
+
+  getPermissions() {
+    return this.call<Permission[]>('getPermissions');
+  }
+
+  getRolePermissions(roleId: string) {
+    return this.call<{ mapping_id: string; role_id_fk: string; permission_id_fk: string; permission_code: string }[]>(
+      'getRolePermissions', { role_id: roleId }
+    );
+  }
+
+  updateRolePermissions(roleId: string, permissions: string[]) {
+    return this.call<{ message: string }>('updateRolePermissions', { role_id: roleId }, { permissions });
+  }
+
+  // ─── Admin: Users ─────────────────────────────────────────────────────────────
+
+  getUsers() {
+    return this.call<AdminUser[]>('getUsers');
+  }
+
+  createUser(data: { username: string; password: string; display_name: string; email: string; role_id: string }) {
+    return this.call<AdminUser>('createUser', {}, data);
+  }
+
+  updateUser(data: Partial<AdminUser> & { user_id: string; password?: string }) {
+    return this.call<{ message: string }>('updateUser', {}, data);
+  }
+
+  deleteUser(userId: string) {
+    return this.call<{ message: string }>('deleteUser', { user_id: userId });
   }
 
   // ─── Masters ─────────────────────────────────────────────────────────────────
 
   getMasters() {
     return this.call<Masters>('getMasters');
-  }
-
-  // ─── Dashboard ───────────────────────────────────────────────────────────────
-
-  getDashboard(userId: string) {
-    return this.call<DashboardData>('getDashboard', { user_id: userId });
-  }
-
-  // ─── Projects ────────────────────────────────────────────────────────────────
-
-  getProjects(userId: string) {
-    return this.call<Project[]>('getProjects', { user_id: userId });
-  }
-
-  createProject(data: ProjectFormData & { created_by: string }) {
-    return this.call<Project>('createProject', {}, data);
-  }
-
-  updateProject(data: Partial<Project> & { last_modified_by: string }) {
-    return this.call<{ message: string }>('updateProject', {}, data);
-  }
-
-  deleteProject(projectId: string, userId: string) {
-    return this.call<{ message: string }>('deleteProject', { project_id: projectId, user_id: userId });
-  }
-
-  // ─── Artifacts ───────────────────────────────────────────────────────────────
-
-  getArtifacts(projectId: string) {
-    return this.call<ProjectArtifact[]>('getArtifacts', { project_id: projectId });
-  }
-
-  createArtifact(data: Partial<ProjectArtifact> & { created_by: string }) {
-    return this.call<ProjectArtifact>('createArtifact', {}, data);
-  }
-
-  updateArtifact(data: Partial<ProjectArtifact>) {
-    return this.call<{ message: string }>('updateArtifact', {}, data);
-  }
-
-  deleteArtifact(artifactId: string) {
-    return this.call<{ message: string }>('deleteArtifact', { artifact_id: artifactId });
-  }
-
-  // ─── Task Artifacts ──────────────────────────────────────────────────────────
-
-  getTaskArtifacts(taskId: string) {
-    return this.call<TaskArtifact[]>('getTaskArtifacts', { task_id: taskId });
-  }
-
-  createTaskArtifact(data: Partial<TaskArtifact> & { created_by: string }) {
-    return this.call<TaskArtifact>('createTaskArtifact', {}, data);
-  }
-
-  updateTaskArtifact(data: Partial<TaskArtifact>) {
-    return this.call<{ message: string }>('updateTaskArtifact', {}, data);
-  }
-
-  deleteTaskArtifact(artifactId: string) {
-    return this.call<{ message: string }>('deleteTaskArtifact', { task_artifact_id: artifactId });
-  }
-
-  // ─── Tasks ───────────────────────────────────────────────────────────────────
-
-  getTasks(userId: string, projectIds?: string[]) {
-    const params: Record<string, string> = { user_id: userId };
-    if (projectIds?.length) params['project_ids'] = projectIds.join(',');
-    return this.call<Task[]>('getTasks', params);
-  }
-
-  createTask(data: Partial<Task> & { created_by: string }) {
-    return this.call<Task>('createTask', {}, data);
-  }
-
-  updateTask(data: Partial<Task> & { last_modified_by: string }) {
-    return this.call<{ message: string }>('updateTask', {}, data);
-  }
-
-  deleteTask(taskId: string) {
-    return this.call<{ message: string }>('deleteTask', { task_id: taskId });
   }
 }

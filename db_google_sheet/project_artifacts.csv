@@ -1,6 +1,0 @@
-project_artifact_id,project_id_fk,artifact_title,artifact_value,artifact_type,is_sensitive,created_by,created_on
-A001,K-2024-001,Figma Design Link,https://figma.com/file/kinetic-redesign,url,FALSE,U001,2024-10-12
-A002,K-2024-001,API Staging URL,https://staging-api.kinetic.com,url,FALSE,U001,2024-10-12
-A003,K-2024-001,DB Password,super_secret_db_pass_123,text,TRUE,U001,2024-10-12
-A004,K-2024-042,Jira Board,https://jira.kinetic.com/editorial,url,FALSE,U002,2024-09-01
-A005,K-2024-042,CRM API Key,crm_key_abc123xyz,text,TRUE,U002,2024-09-01

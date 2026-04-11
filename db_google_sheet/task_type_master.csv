@@ -1,8 +1,0 @@
-type_id,type_name,type_label
-T001,feature,Feature
-T002,bug,Bug
-T003,improvement,Improvement
-T004,research,Research
-T005,documentation,Documentation
-T006,design,Design
-T007,devops,DevOps

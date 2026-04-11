@@ -1,8 +1,0 @@
-task_id,project_id_fk,task_title,task_remarks,task_status,task_assignees,task_start_date,task_end_date,task_start_time,task_end_time,task_order_id,type_id,priority_id,estimated_hours,spent_hours,created_by,created_on,last_modified_by,last_modified_on
-KT-1001,K-2024-001,Implement authentication middleware,Need to secure all API endpoints under v1/core namespace with JWT verification.,in_progress,U003|U004,2024-10-15,2024-10-20,09:00,18:00,1,T001,P001,12,8,U001,2024-10-15,U003,2024-10-18
-KT-1002,K-2024-001,Redesign billing dashboard,Update billing UI to match new design tokens and component system.,in_review,U003,2024-10-18,2024-10-24,10:00,17:00,2,T006,P003,16,4,U001,2024-10-18,U003,2024-10-22
-KT-1003,K-2024-001,API Documentation update,,triage,,,,,,3,T005,P004,4,0,U001,2024-10-20,,
-KT-1004,K-2024-001,Setup CI/CD pipeline,Configure GitHub Actions for automated deployment to staging and production.,open,U004,2024-10-22,2024-10-30,09:00,17:00,4,T007,P002,8,2,U001,2024-10-22,U004,2024-10-23
-KT-1005,K-2024-042,Update navigation schema,Refactor navigation to support new editorial sections.,completed,U003,2024-09-05,2024-09-15,09:00,17:00,1,T001,P002,6,6,U002,2024-09-05,U003,2024-09-15
-KT-1006,K-2024-042,Design system documentation,Complete documentation for all new design tokens and component variants.,completed,U004,2024-09-10,2024-09-20,10:00,18:00,2,T005,P003,10,10,U002,2024-09-10,U004,2024-09-20
-KT-1007,K-2024-089,iOS app wireframes,Create initial wireframes for key screens of the mobile app.,on_hold,U003,2024-11-20,2024-12-05,09:00,17:00,1,T006,P002,20,5,U002,2024-11-20,U003,2024-11-22

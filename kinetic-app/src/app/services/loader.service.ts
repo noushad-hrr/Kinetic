@@ -1,12 +1,39 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, computed, signal } from '@angular/core';
+
+export interface LoaderTask {
+  id: string;
+  message: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class LoaderService {
-  private _count = signal(0);
+  private readonly _tasks = signal<Map<string, string>>(new Map());
 
-  /** True whenever at least one HTTP request is in flight */
-  isLoading = computed(() => this._count() > 0);
+  /** Active tasks in start order (for debugging / future multi-line UI). */
+  readonly tasks = computed((): LoaderTask[] => {
+    const m = this._tasks();
+    return [...m.entries()].map(([id, message]) => ({ id, message }));
+  });
 
-  start() { this._count.update(n => n + 1); }
-  stop()  { this._count.update(n => Math.max(0, n - 1)); }
+  /** Most recently started task (shown in the shell). */
+  readonly primaryTask = computed(() => {
+    const list = this.tasks();
+    return list.length ? list[list.length - 1]!.message : '';
+  });
+
+  readonly isLoading = computed(() => this._tasks().size > 0);
+
+  startTask(message: string): string {
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    this._tasks.update(m => new Map(m).set(id, message));
+    return id;
+  }
+
+  endTask(id: string): void {
+    this._tasks.update(m => {
+      const next = new Map(m);
+      next.delete(id);
+      return next;
+    });
+  }
 }

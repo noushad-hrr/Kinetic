@@ -1,419 +1,182 @@
-import { Component, OnInit, signal } from '@angular/core';
-import { CommonModule, DecimalPipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
-import { ApiService } from '../../services/api.service';
-import { AuthService } from '../../services/auth.service';
-import { MastersService } from '../../services/masters.service';
-import { StatusChipComponent } from '../../shared/components/status-chip/status-chip.component';
-import { DashboardData, Task, ProjectStat, StatusGroup } from '../../models';
-import { NotificationService } from '../../services/notification.service';
-import { isOverdue, formatDate, daysUntil } from '../../utils/date.utils';
+import { Component } from '@angular/core';
+import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink, StatusChipComponent, DecimalPipe],
+  imports: [CommonModule],
   template: `
-    <div class="p-6 md:p-8 space-y-8">
+    <div class="p-4 max-w-7xl mx-auto space-y-4">
 
-      <!-- Loading -->
-      @if (loading()) {
-        <div class="loading-pulse mb-2"></div>
-      }
+      <!-- Stat cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        @for (s of stats; track s.label) {
+          <div class="bg-white rounded-lg border border-slate-100 px-4 py-3 flex items-center gap-3">
+            <div class="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" [class]="s.iconBg">
+              <span class="material-symbols-outlined text-base" [class]="s.iconColor" style="font-variation-settings:'FILL' 1;">{{ s.icon }}</span>
+            </div>
+            <div>
+              <p class="text-xl font-bold text-slate-900 leading-none">{{ s.value }}</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">{{ s.label }}</p>
+            </div>
+          </div>
+        }
+      </div>
 
-      <!-- Welcome row -->
-      <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <p class="text-[10px] font-bold uppercase tracking-widest text-secondary mb-1">Overview</p>
-          <h1 class="text-3xl font-bold tracking-tight text-on-surface">
-            Good {{ greeting() }}, {{ firstName() }}
-          </h1>
-          <p class="text-xs text-outline mt-1">{{ todayLabel() }}</p>
+      <!-- Main grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+
+        <!-- Recent Tasks (2/3 width) -->
+        <div class="lg:col-span-2 bg-white rounded-lg border border-slate-100 overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+            <span class="text-xs font-semibold text-slate-700">Recent Tasks</span>
+            <span class="text-[10px] text-slate-400">Last 7 days</span>
+          </div>
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="bg-slate-50/60 border-b border-slate-100">
+                <th class="text-left px-4 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Task</th>
+                <th class="text-left px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Project</th>
+                <th class="text-left px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                <th class="text-left px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">Priority</th>
+                <th class="text-left px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider hidden lg:table-cell">Due</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (t of recentTasks; track t.id) {
+                <tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                  <td class="px-4 py-2">
+                    <p class="font-medium text-slate-800 truncate max-w-[200px]">{{ t.title }}</p>
+                    <p class="text-[10px] text-slate-400">{{ t.id }}</p>
+                  </td>
+                  <td class="px-3 py-2 text-slate-500 hidden sm:table-cell">{{ t.project }}</td>
+                  <td class="px-3 py-2">
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold" [class]="statusClass(t.status)">{{ t.status }}</span>
+                  </td>
+                  <td class="px-3 py-2 hidden md:table-cell">
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold" [class]="priorityClass(t.priority)">{{ t.priority }}</span>
+                  </td>
+                  <td class="px-3 py-2 text-slate-400 hidden lg:table-cell">{{ t.due }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
         </div>
-        <div class="flex items-center gap-3">
-          <button (click)="refresh()" [disabled]="loading()"
-                  class="btn-secondary text-xs" title="Refresh dashboard">
-            <span class="material-symbols-outlined text-sm" [class.animate-spin]="loading()">refresh</span>
-            Refresh
-          </button>
-          <a routerLink="/projects" class="btn-secondary text-xs">
-            <span class="material-symbols-outlined text-sm">folder_open</span>
-            Projects
-          </a>
-          <a routerLink="/tasks" class="btn-primary text-xs">
-            <span class="material-symbols-outlined text-sm">add_task</span>
-            New Task
-          </a>
+
+        <!-- Project summary (1/3 width) -->
+        <div class="bg-white rounded-lg border border-slate-100 overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+            <span class="text-xs font-semibold text-slate-700">Projects</span>
+            <span class="text-[10px] text-primary font-medium cursor-pointer">View all</span>
+          </div>
+          <div class="divide-y divide-slate-50">
+            @for (p of projects; track p.name) {
+              <div class="px-4 py-2.5">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs font-medium text-slate-800 truncate max-w-[130px]">{{ p.name }}</span>
+                  <span class="text-[10px] text-slate-400">{{ p.done }}/{{ p.total }}</span>
+                </div>
+                <div class="h-1 bg-slate-100 rounded-full overflow-hidden">
+                  <div class="h-full bg-primary rounded-full" [style.width.%]="(p.done/p.total)*100"></div>
+                </div>
+              </div>
+            }
+          </div>
         </div>
       </div>
 
-      <!-- Stats cards -->
-      @if (data()) {
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <a routerLink="/tasks" class="bg-surface-container-lowest p-5 rounded-lg border border-outline-variant/10 ambient-lift hover:border-primary/20 transition-colors">
-            <p class="text-[10px] font-bold text-secondary tracking-wider uppercase mb-2">Total Projects</p>
-            <div class="flex items-end justify-between">
-              <span class="text-3xl font-bold">{{ data()!.stats.totalProjects }}</span>
-              <span class="material-symbols-outlined text-primary">folder_open</span>
-            </div>
-          </a>
-          <a routerLink="/tasks" class="bg-surface-container-lowest p-5 rounded-lg border border-outline-variant/10 ambient-lift hover:border-primary/20 transition-colors">
-            <p class="text-[10px] font-bold text-secondary tracking-wider uppercase mb-2">Open Tasks</p>
-            <div class="flex items-end justify-between">
-              <span class="text-3xl font-bold text-on-surface">{{ data()!.stats.openTasks }}</span>
-              <span class="material-symbols-outlined text-primary">pending_actions</span>
-            </div>
-          </a>
-          <a routerLink="/tasks" class="bg-surface-container-lowest p-5 rounded-lg border border-outline-variant/10 ambient-lift hover:border-primary/20 transition-colors">
-            <p class="text-[10px] font-bold text-secondary tracking-wider uppercase mb-2">In Progress</p>
-            <div class="flex items-end justify-between">
-              <span class="text-3xl font-bold text-on-surface">{{ data()!.stats.inProgressTasks }}</span>
-              <span class="material-symbols-outlined text-primary">running_with_errors</span>
-            </div>
-          </a>
-          <a routerLink="/tasks" class="bg-error-container/30 p-5 rounded-lg border border-error/10 ambient-lift hover:border-error/30 transition-colors"
-             [class.bg-error-container]="data()!.stats.overdueTasks > 0">
-            <p class="text-[10px] font-bold tracking-wider uppercase mb-2"
-               [class.text-error]="data()!.stats.overdueTasks > 0"
-               [class.text-secondary]="data()!.stats.overdueTasks === 0">Overdue</p>
-            <div class="flex items-end justify-between">
-              <span class="text-3xl font-bold" [class.text-error]="data()!.stats.overdueTasks > 0">{{ data()!.stats.overdueTasks }}</span>
-              <span class="material-symbols-outlined" [class.text-error]="data()!.stats.overdueTasks > 0"
-                    style="font-variation-settings:'FILL' 1;">warning</span>
-            </div>
-          </a>
-          <a routerLink="/tasks" class="bg-surface-container-lowest p-5 rounded-lg border border-outline-variant/10 ambient-lift hover:border-primary/20 transition-colors">
-            <p class="text-[10px] font-bold text-secondary tracking-wider uppercase mb-2">Completed</p>
-            <div class="flex items-end justify-between">
-              <span class="text-3xl font-bold text-tertiary-container">{{ data()!.stats.completedTasks }}</span>
-              <span class="material-symbols-outlined text-tertiary-container" style="font-variation-settings:'FILL' 1;">verified</span>
-            </div>
-          </a>
+      <!-- Bottom row: Overdue + Upcoming -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+
+        <!-- Overdue -->
+        <div class="bg-white rounded-lg border border-slate-100 overflow-hidden">
+          <div class="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
+            <span class="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"></span>
+            <span class="text-xs font-semibold text-slate-700">Overdue</span>
+            <span class="ml-auto text-[10px] font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">3</span>
+          </div>
+          <div class="divide-y divide-slate-50">
+            @for (t of overdueTasks; track t.id) {
+              <div class="px-4 py-2 flex items-center justify-between">
+                <div>
+                  <p class="text-xs font-medium text-slate-800">{{ t.title }}</p>
+                  <p class="text-[10px] text-slate-400">{{ t.project }}</p>
+                </div>
+                <span class="text-[10px] text-red-500 font-medium">{{ t.due }}</span>
+              </div>
+            }
+          </div>
         </div>
 
-        <!-- Today's Tasks panel -->
-        @if ((data()!.todaysTasks ?? []).length > 0) {
-          <div class="bg-error-container/20 border border-error/20 rounded-xl overflow-hidden">
-            <div class="px-6 py-4 border-b border-error/10 flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <span class="material-symbols-outlined text-error" style="font-variation-settings:'FILL' 1;">alarm</span>
-                <div>
-                  <h3 class="text-sm font-semibold text-on-surface">Today's Tasks</h3>
-                  <p class="text-[10px] text-outline mt-0.5">{{ (data()!.todaysTasks ?? []).length }} task(s) due today — act now</p>
-                </div>
-              </div>
-              <a routerLink="/tasks" class="text-xs font-semibold text-error">View All</a>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-error/10">
-              @for (task of (data()!.todaysTasks ?? []).slice(0, 6); track task.task_id) {
-                <div class="p-4 hover:bg-error-container/10 transition-colors">
-                  <div class="flex items-start justify-between gap-2">
-                    <div class="flex-1 min-w-0">
-                      <p class="text-sm font-semibold text-on-surface truncate">{{ task.task_title }}</p>
-                      <p class="text-[10px] text-outline mt-0.5">{{ getProjectName(task.project_id_fk) }}</p>
-                    </div>
-                    <app-status-chip [value]="task.task_status" [label]="masters.getStatusLabel(task.task_status)" />
-                  </div>
-                  @if (task.task_assignees) {
-                    <p class="text-[10px] text-outline mt-2 flex items-center gap-1">
-                      <span class="material-symbols-outlined text-xs">person</span>
-                      {{ masters.getAssigneeNames(task.task_assignees) }}
-                    </p>
-                  }
-                </div>
-              }
-            </div>
+        <!-- Due this week -->
+        <div class="bg-white rounded-lg border border-slate-100 overflow-hidden">
+          <div class="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0"></span>
+            <span class="text-xs font-semibold text-slate-700">Due This Week</span>
+            <span class="ml-auto text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">5</span>
           </div>
-        }
-
-        <!-- Tasks by Status panels — All Projects, All Time -->
-        @if ((data()!.statusGroups ?? []).length > 0) {
-          <div>
-            <h3 class="text-sm font-semibold text-on-surface mb-3">Tasks by Status — All Projects</h3>
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              @for (sg of (data()!.statusGroups ?? []); track sg.status) {
-                <a routerLink="/tasks"
-                   [class]="sg.tasks.length > 0
-                     ? 'rounded-xl p-4 border transition-colors cursor-pointer block bg-surface-container-lowest ambient-lift border-outline-variant/10 hover:border-primary/20'
-                     : 'rounded-xl p-4 border transition-colors cursor-pointer block bg-surface-container-low border-outline-variant/5 opacity-50'">
-                  <div class="flex items-center justify-between mb-2">
-                    <app-status-chip [value]="sg.status" [label]="sg.label" />
-                  </div>
-                  <p class="text-2xl font-bold" [class]="sg.tasks.length > 0 ? 'text-on-surface' : 'text-outline'">{{ sg.tasks.length }}</p>
-                  <p class="text-[10px] text-outline mt-1 truncate">{{ sg.tasks.length > 0 ? getStatusTaskSummary(sg) : 'No tasks' }}</p>
-                </a>
-              }
-            </div>
-          </div>
-        }
-
-        <!-- Bento grid -->
-        <div class="grid grid-cols-12 gap-6">
-
-          <!-- Left: Project performance -->
-          <div class="col-span-12 lg:col-span-4 space-y-6">
-
-            <!-- Project performance -->
-            <div class="bg-surface-container-lowest p-6 rounded-xl ambient-lift">
-              <h3 class="text-sm font-semibold text-on-surface mb-4">Project Performance</h3>
-              @if (data()!.projectStats.length === 0) {
-                <p class="text-sm text-on-surface-variant">No projects yet.</p>
-              }
-              <div class="space-y-5">
-                @for (ps of data()!.projectStats; track ps.project_id) {
-                  <div>
-                    <div class="flex items-center justify-between mb-1.5">
-                      <span class="text-sm font-medium text-on-surface truncate max-w-[150px]" [title]="ps.project_name">{{ ps.project_name }}</span>
-                      <span class="text-xs font-semibold text-secondary ml-2 flex-shrink-0">{{ ps.completed }}/{{ ps.total }}</span>
-                    </div>
-                    <div class="w-full bg-surface-container-low h-2 rounded-full overflow-hidden">
-                      <div class="bg-primary h-full rounded-full transition-all duration-500"
-                           [style.width.%]="ps.total ? (ps.completed / ps.total * 100) : 0"></div>
-                    </div>
-                    <div class="flex items-center gap-3 mt-1.5 text-[10px] text-outline">
-                      <span>{{ ps.open }} open</span>
-                      <span>{{ ps.in_progress }} in progress</span>
-                      @if (ps.total) {
-                        <span class="ml-auto font-semibold text-primary">{{ (ps.completed / ps.total * 100) | number:'1.0-0' }}%</span>
-                      }
-                    </div>
-                  </div>
-                }
-              </div>
-            </div>
-
-            <!-- Summary totals -->
-            <div class="bg-surface-container-lowest p-6 rounded-xl ambient-lift">
-              <h3 class="text-sm font-semibold text-on-surface mb-4">Task Summary</h3>
-              <div class="space-y-3">
-                @let total = data()!.stats.openTasks + data()!.stats.inProgressTasks + data()!.stats.completedTasks + data()!.stats.overdueTasks;
-                @if (total === 0) {
-                  <p class="text-sm text-on-surface-variant">No tasks yet.</p>
-                }
-                @if (total > 0) {
-                  <div class="flex items-center gap-3">
-                    <div class="w-full bg-surface-container-low h-3 rounded-full overflow-hidden flex">
-                      <div class="bg-tertiary-container h-full transition-all" [style.width.%]="total ? (data()!.stats.completedTasks / total * 100) : 0" title="Completed"></div>
-                      <div class="bg-primary h-full transition-all" [style.width.%]="total ? (data()!.stats.inProgressTasks / total * 100) : 0" title="In Progress"></div>
-                      <div class="bg-secondary-container h-full transition-all" [style.width.%]="total ? (data()!.stats.openTasks / total * 100) : 0" title="Open"></div>
-                      <div class="bg-error-container h-full transition-all" [style.width.%]="total ? (data()!.stats.overdueTasks / total * 100) : 0" title="Overdue"></div>
-                    </div>
-                  </div>
-                  <div class="grid grid-cols-2 gap-2 text-xs">
-                    <div class="flex items-center gap-2">
-                      <div class="w-2.5 h-2.5 rounded-full bg-tertiary-container flex-shrink-0"></div>
-                      <span class="text-on-surface-variant">Completed</span>
-                      <span class="ml-auto font-bold">{{ data()!.stats.completedTasks }}</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <div class="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0"></div>
-                      <span class="text-on-surface-variant">In Progress</span>
-                      <span class="ml-auto font-bold">{{ data()!.stats.inProgressTasks }}</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <div class="w-2.5 h-2.5 rounded-full bg-secondary-container flex-shrink-0"></div>
-                      <span class="text-on-surface-variant">Open</span>
-                      <span class="ml-auto font-bold">{{ data()!.stats.openTasks }}</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <div class="w-2.5 h-2.5 rounded-full bg-error flex-shrink-0"></div>
-                      <span class="text-on-surface-variant">Overdue</span>
-                      <span class="ml-auto font-bold text-error">{{ data()!.stats.overdueTasks }}</span>
-                    </div>
-                  </div>
-                }
-              </div>
-            </div>
-          </div>
-
-          <!-- Right: Upcoming + Recent -->
-          <div class="col-span-12 lg:col-span-8 space-y-6">
-
-            <!-- Upcoming tasks -->
-            <div class="bg-surface-container-lowest rounded-xl ambient-lift overflow-hidden">
-              <div class="p-6 border-b border-surface-container-low flex items-center justify-between">
+          <div class="divide-y divide-slate-50">
+            @for (t of upcomingTasks; track t.id) {
+              <div class="px-4 py-2 flex items-center justify-between">
                 <div>
-                  <h3 class="text-sm font-semibold text-on-surface">Upcoming Due Tasks</h3>
-                  <p class="text-[10px] text-outline mt-0.5">Next 7 days</p>
+                  <p class="text-xs font-medium text-slate-800">{{ t.title }}</p>
+                  <p class="text-[10px] text-slate-400">{{ t.project }}</p>
                 </div>
-                <a routerLink="/tasks" class="text-xs font-semibold text-primary">See All</a>
+                <span class="text-[10px] text-amber-600 font-medium">{{ t.due }}</span>
               </div>
-              @if (data()!.upcomingTasks.length === 0) {
-                <div class="p-8 text-center">
-                  <span class="material-symbols-outlined text-3xl text-outline/30 block mb-2">event_available</span>
-                  <p class="text-sm text-on-surface-variant">No tasks due in the next 7 days.</p>
-                </div>
-              }
-              <div>
-                @for (task of data()!.upcomingTasks; track task.task_id) {
-                  <div class="p-4 hover:bg-surface-container-low/40 transition-colors flex items-center gap-4 border-b border-surface-container last:border-0">
-                    <div class="w-10 h-10 rounded-lg flex-shrink-0 flex flex-col items-center justify-center text-center"
-                         [class]="isOverdue(task.task_end_date, task.task_status) ? 'bg-error-container text-on-error-container' : 'bg-surface-container text-secondary'">
-                      <span class="text-[9px] font-bold uppercase leading-none">{{ task.task_end_date | date:'MMM' }}</span>
-                      <span class="text-base font-bold leading-none">{{ task.task_end_date | date:'d' }}</span>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <h4 class="text-sm font-semibold text-on-surface truncate">{{ task.task_title }}</h4>
-                      <div class="flex items-center gap-2 mt-1 flex-wrap">
-                        <span class="text-[10px] font-bold bg-primary-fixed text-on-primary-fixed-variant px-2 py-0.5 rounded-full">
-                          {{ getProjectName(task.project_id_fk) }}
-                        </span>
-                        @if (task.priority_id) {
-                          <app-status-chip [value]="masters.getPriorityLabel(task.priority_id)"
-                                           [label]="masters.getPriorityLabel(task.priority_id)" type="priority" />
-                        }
-                        <span class="text-xs text-secondary flex items-center gap-1">
-                          <span class="material-symbols-outlined text-sm">schedule</span>
-                          {{ daysUntil(task.task_end_date!) }}
-                        </span>
-                      </div>
-                      @if (task.task_assignees) {
-                        <p class="text-[10px] text-outline mt-0.5">{{ masters.getAssigneeNames(task.task_assignees) }}</p>
-                      }
-                    </div>
-                    <app-status-chip [value]="task.task_status" [label]="masters.getStatusLabel(task.task_status)" />
-                  </div>
-                }
-              </div>
-            </div>
-
-            <!-- Recent tasks table -->
-            <div class="bg-surface-container-lowest rounded-xl ambient-lift overflow-hidden">
-              <div class="p-6 border-b border-surface-container-low flex items-center justify-between">
-                <div>
-                  <h3 class="text-sm font-semibold text-on-surface">Recent Task Activity</h3>
-                  <p class="text-[10px] text-outline mt-0.5">Last 5 modified tasks</p>
-                </div>
-                @if (lastRefreshed()) {
-                  <span class="text-[10px] text-outline">Updated {{ lastRefreshed() }}</span>
-                }
-              </div>
-              <div class="overflow-x-auto">
-                <table class="w-full text-left k-table">
-                  <thead>
-                    <tr>
-                      <th>Task</th>
-                      <th>Project</th>
-                      <th>Priority</th>
-                      <th>Status</th>
-                      <th class="text-right">Modified</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @if (data()!.recentTasks.length === 0) {
-                      <tr><td colspan="5" class="text-center py-8 text-on-surface-variant">No tasks yet.</td></tr>
-                    }
-                    @for (task of data()!.recentTasks; track task.task_id) {
-                      <tr [class.row-overdue]="isOverdue(task.task_end_date, task.task_status)">
-                        <td>
-                          <div class="font-semibold text-on-surface">{{ task.task_title }}</div>
-                          @if (task.task_assignees) {
-                            <div class="text-[10px] text-outline mt-0.5">{{ masters.getAssigneeNames(task.task_assignees) }}</div>
-                          }
-                          @if (isOverdue(task.task_end_date, task.task_status)) {
-                            <span class="text-[10px] text-error font-bold">OVERDUE · Due {{ formatDate(task.task_end_date) }}</span>
-                          }
-                        </td>
-                        <td>
-                          <span class="text-[10px] bg-secondary-fixed/50 text-on-secondary-fixed-variant px-2 py-0.5 rounded-full">
-                            {{ getProjectName(task.project_id_fk) }}
-                          </span>
-                        </td>
-                        <td>
-                          @if (task.priority_id) {
-                            <app-status-chip [value]="masters.getPriorityLabel(task.priority_id)"
-                                             [label]="masters.getPriorityLabel(task.priority_id)" type="priority" />
-                          } @else {
-                            <span class="text-outline text-xs">—</span>
-                          }
-                        </td>
-                        <td>
-                          <app-status-chip [value]="task.task_status" [label]="masters.getStatusLabel(task.task_status)" />
-                        </td>
-                        <td class="text-right text-secondary">{{ formatDate(task.last_modified_on) }}</td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            }
           </div>
         </div>
-      }
+      </div>
 
-      <!-- Error -->
-      @if (errorMsg()) {
-        <div class="p-4 bg-error-container rounded-lg text-on-error-container text-sm">{{ errorMsg() }}</div>
-      }
     </div>
   `
 })
-export class DashboardComponent implements OnInit {
-  data = signal<DashboardData | null>(null);
-  loading = signal(true);
-  errorMsg = signal('');
-  lastRefreshed = signal('');
-  private projects: {id: string; name: string}[] = [];
+export class DashboardComponent {
+  stats = [
+    { label: 'Projects',    value: 12, icon: 'folder_open',    iconBg: 'bg-blue-50',   iconColor: 'text-blue-500'  },
+    { label: 'Open Tasks',  value: 34, icon: 'circle',         iconBg: 'bg-slate-100', iconColor: 'text-slate-500' },
+    { label: 'In Progress', value: 8,  icon: 'autorenew',      iconBg: 'bg-amber-50',  iconColor: 'text-amber-500' },
+    { label: 'Overdue',     value: 3,  icon: 'warning',        iconBg: 'bg-red-50',    iconColor: 'text-red-500'   },
+  ];
 
-  constructor(
-    private api: ApiService,
-    public auth: AuthService,
-    public masters: MastersService,
-    private notif: NotificationService
-  ) {}
+  recentTasks = [
+    { id: 'KT-0031', title: 'Homepage redesign',        project: 'Web Revamp',      status: 'In Progress', priority: 'High',   due: 'Apr 15' },
+    { id: 'KT-0032', title: 'API endpoint integration', project: 'Backend',         status: 'Open',        priority: 'Medium', due: 'Apr 18' },
+    { id: 'KT-0028', title: 'Database migration',       project: 'Infrastructure',  status: 'Overdue',     priority: 'High',   due: 'Apr 10' },
+    { id: 'KT-0033', title: 'Copy review — landing pg', project: 'Content',         status: 'Open',        priority: 'Low',    due: 'Apr 22' },
+    { id: 'KT-0030', title: 'Bug fix #231',             project: 'Mobile App',      status: 'In Progress', priority: 'High',   due: 'Apr 14' },
+  ];
 
-  ngOnInit() { this.load(); }
+  projects = [
+    { name: 'Web Revamp',      done: 12, total: 18 },
+    { name: 'Mobile App',      done: 7,  total: 15 },
+    { name: 'Backend',         done: 3,  total: 10 },
+    { name: 'Content',         done: 9,  total: 12 },
+    { name: 'Infrastructure',  done: 2,  total: 8  },
+  ];
 
-  load() {
-    const userId = this.auth.currentUser()?.user_id;
-    if (!userId) return;
-    this.loading.set(true);
-    this.errorMsg.set('');
+  overdueTasks = [
+    { id: 'KT-0028', title: 'Database migration',  project: 'Infrastructure', due: '2 days ago' },
+    { id: 'KT-0019', title: 'QA report submission', project: 'Mobile App',    due: '4 days ago' },
+    { id: 'KT-0022', title: 'Design handoff',       project: 'Web Revamp',    due: '5 days ago' },
+  ];
 
-    this.api.getDashboard(userId).subscribe({
-      next: (d) => {
-        this.data.set(d);
-        this.projects = d.projectStats.map(p => ({ id: p.project_id, name: p.project_name }));
-        this.loading.set(false);
-        const now = new Date();
-        this.lastRefreshed.set(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-        this.notif.setTodayTasks(d.todaysTasks ?? []);
-      },
-      error: (err: Error) => {
-        this.errorMsg.set(err.message);
-        this.loading.set(false);
-      }
-    });
+  upcomingTasks = [
+    { id: 'KT-0030', title: 'Bug fix #231',             project: 'Mobile App',  due: 'Apr 14' },
+    { id: 'KT-0031', title: 'Homepage redesign',        project: 'Web Revamp',  due: 'Apr 15' },
+    { id: 'KT-0035', title: 'Sprint retrospective',     project: 'Backend',     due: 'Apr 16' },
+    { id: 'KT-0036', title: 'Release notes draft',      project: 'Content',     due: 'Apr 17' },
+    { id: 'KT-0032', title: 'API endpoint integration', project: 'Backend',     due: 'Apr 18' },
+  ];
+
+  statusClass(s: string): string {
+    return { 'In Progress': 'bg-amber-100 text-amber-700', 'Open': 'bg-blue-100 text-blue-700',
+             'Overdue': 'bg-red-100 text-red-700', 'Completed': 'bg-green-100 text-green-700' }[s] ?? 'bg-slate-100 text-slate-600';
   }
 
-  refresh() { this.load(); }
-
-  greeting(): string {
-    const h = new Date().getHours();
-    if (h < 12) return 'Morning';
-    if (h < 17) return 'Afternoon';
-    return 'Evening';
-  }
-
-  firstName(): string {
-    return this.auth.currentUser()?.display_name?.split(' ')[0] ?? '';
-  }
-
-  todayLabel(): string {
-    return new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  }
-
-  getProjectName(id: string): string {
-    return this.projects.find(p => p.id === id)?.name ?? id;
-  }
-
-  isOverdue = isOverdue;
-  formatDate = formatDate;
-  daysUntil = daysUntil;
-
-  getStatusTaskSummary(sg: { tasks: Task[] }): string {
-    if (!sg.tasks.length) return 'No tasks';
-    const projects = new Set(sg.tasks.map(t => t.project_id_fk));
-    return `${sg.tasks.length} task${sg.tasks.length > 1 ? 's' : ''} · ${projects.size} project${projects.size > 1 ? 's' : ''}`;
+  priorityClass(p: string): string {
+    return { 'High': 'bg-red-100 text-red-600', 'Medium': 'bg-amber-100 text-amber-600',
+             'Low': 'bg-slate-100 text-slate-500' }[p] ?? 'bg-slate-100 text-slate-500';
   }
 }

@@ -1,7 +1,0 @@
-user_id,username,password_hash,display_name,email,role_id,is_active,created_on,last_login_on
-U001,admin,admin123,Alex Sterling,admin@kinetic.com,R001,TRUE,2024-01-01,
-U002,sarah.j,sarah123,Sarah Johnson,sarah.j@kinetic.com,R002,TRUE,2024-01-05,
-U003,liam.n,liam123,Liam Nguyen,liam.n@kinetic.com,R003,TRUE,2024-01-10,
-U004,priya.k,priya123,Priya Kumar,priya.k@kinetic.com,R003,TRUE,2024-02-01,
-U005,james.h,james123,James Hart,james.h@kinetic.com,R004,TRUE,2024-02-15,
-U006,inactive.user,pass123,Inactive User,inactive@kinetic.com,R004,FALSE,2024-03-01,

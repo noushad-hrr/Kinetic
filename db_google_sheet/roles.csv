@@ -1,5 +1,0 @@
-role_id,role_name,role_description
-R001,admin,Full access to all features and data
-R002,manager,Can manage projects and tasks for assigned projects
-R003,contributor,Can create and update tasks on assigned projects
-R004,viewer,Read-only access to assigned projects

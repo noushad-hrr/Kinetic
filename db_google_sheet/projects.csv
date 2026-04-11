@@ -1,4 +1,0 @@
-project_id,project_name,project_description,project_status,project_start_date,project_end_date,created_by,created_on,last_modified_by,last_modified_on
-K-2024-001,Kinetic App Redesign,Revamping the core typography and layout systems for the Q3 release cycle.,in_progress,2024-10-12,2024-12-15,U001,2024-10-01,U001,2024-10-20
-K-2024-042,Editorial Content Pipeline,Middleware development for seamless CRM data synchronization and editorial workflow.,completed,2024-09-01,2024-10-30,U001,2024-08-25,U002,2024-10-30
-K-2024-089,Mobile App Beta,Internal testing phase for iOS and Android native workspace application.,on_hold,2024-11-20,2025-01-15,U002,2024-11-01,U002,2024-11-15

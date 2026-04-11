@@ -1,8 +1,0 @@
-status_id,status_name,status_label,applies_to,sort_order
-S001,triage,Triage,both,1
-S002,open,Open,both,2
-S003,in_progress,In Progress,both,3
-S004,in_review,In Review,task,4
-S005,on_hold,On Hold,both,5
-S006,closed,Closed,both,6
-S007,completed,Completed,both,7
