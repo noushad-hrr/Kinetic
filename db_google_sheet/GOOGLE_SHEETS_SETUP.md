@@ -17,8 +17,9 @@ Right-click a tab → Rename. Create each tab:
 | priority_master | Priority levels |
 | task_type_master | Task types |
 | projects | Projects data |
-| project_artifacts | Project artifacts |
-| tasks | Tasks data |
+| tasks_manager_project_artifacts | Project artifacts |
+| tasks_manager_task_artifacts | Task artifacts |
+| tasks_manager_tasks | Tasks data |
 | user_project_permissions | User–Project access mapping |
 
 ## Step 3 – Paste Headers + Data
@@ -83,13 +84,13 @@ K-2024-042 | Editorial Content Pipeline | Middleware development for CRM data sy
 K-2024-089 | Mobile App Beta | Internal testing phase for iOS and Android native workspace. | on_hold | 2024-11-20 | 2025-01-15 | U002 | 2024-11-01 | U002 | 2024-11-15
 ```
 
-### Tab: project_artifacts
+### Tab: tasks_manager_project_artifacts
 ```
-project_artifact_id | project_id_fk | artifact_title | artifact_value | artifact_type | is_sensitive | created_by | created_on
-A001 | K-2024-001 | Figma Design Link | https://figma.com/file/kinetic-redesign | url | FALSE | U001 | 2024-10-12
-A002 | K-2024-001 | API Staging URL | https://staging-api.kinetic.com | url | FALSE | U001 | 2024-10-12
-A003 | K-2024-001 | DB Password | super_secret_db_pass_123 | text | TRUE | U001 | 2024-10-12
-A004 | K-2024-042 | Jira Board | https://jira.kinetic.com/editorial | url | FALSE | U002 | 2024-09-01
+tasks_manager_project_artifacts_id | tasks_manager_project_artifacts_id_fk | artifact_title | artifact_value | artifact_type | description | is_sensitive | created_by | created_on
+PA0001 | K-2024-001 | Figma Design Link | https://figma.com/file/kinetic-redesign | url | | FALSE | U001 | 2024-10-12
+PA0002 | K-2024-001 | API Staging URL | https://staging-api.kinetic.com | url | | FALSE | U001 | 2024-10-12
+PA0003 | K-2024-001 | DB Password | super_secret_db_pass_123 | text | | TRUE | U001 | 2024-10-12
+PA0004 | K-2024-042 | Jira Board | https://jira.kinetic.com/editorial | url | | FALSE | U002 | 2024-09-01
 ```
 
 ### Tab: user_project_permissions
@@ -108,7 +109,7 @@ M010 | U005 | K-2024-001 | TRUE | FALSE | FALSE | FALSE
 M011 | U005 | K-2024-042 | TRUE | FALSE | FALSE | FALSE
 ```
 
-### Tab: tasks
+### Tab: tasks_manager_tasks
 ```
 task_id | project_id_fk | task_title | task_remarks | task_status | task_assignees | task_start_date | task_end_date | task_start_time | task_end_time | task_order_id | type_id | priority_id | estimated_hours | spent_hours | created_by | created_on | last_modified_by | last_modified_on
 KT-1001 | K-2024-001 | Implement authentication middleware | Secure all API endpoints with JWT verification. | in_progress | U003|U004 | 2024-10-15 | 2024-10-20 | 09:00 | 18:00 | 1 | T001 | P001 | 12 | 8 | U001 | 2024-10-15 | U003 | 2024-10-18

@@ -1,10 +1,10 @@
 import { Component, computed, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormBuilder, Validators, FormArray } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
-import { Project } from '../../models';
+import { Project, ProjectArtifact } from '../../models';
 import { MastersService } from '../../services/masters.service';
 import { ToastService } from '../../services/toast.service';
 import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.component';
@@ -129,6 +129,10 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
                         <span class="material-symbols-outlined text-[14px]">check_circle</span>
                         Tasks
                       </a>
+                      <button type="button" class="p-1.5 text-slate-400 hover:text-primary rounded-lg hover:bg-slate-100" title="View Details"
+                              (click)="viewProject(p)">
+                        <span class="material-symbols-outlined text-[16px]">visibility</span>
+                      </button>
                       <button type="button" class="p-1.5 text-slate-400 hover:text-primary rounded-lg hover:bg-slate-100" title="Edit"
                               (click)="openProjectModal(p)">
                         <span class="material-symbols-outlined text-[16px]">edit</span>
@@ -208,48 +212,112 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
       (closed)="closeProjectModal()"
       (backdropClose)="closeProjectModal()">
       @if (projectForm) {
-        <form [formGroup]="projectForm" class="space-y-3">
-          <div>
-            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Name <span class="text-red-500">*</span></label>
-            <input formControlName="project_name" type="text" placeholder="e.g. Mobile App"
-                   class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-            @if (projectForm.get('project_name')?.invalid && projectForm.get('project_name')?.touched) {
-              <p class="text-red-600 text-2xs mt-1">Name is required</p>
-            }
-          </div>
-          <div>
-            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Description</label>
-            <textarea formControlName="project_description" placeholder="Project details..." rows="3"
-                   class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary"></textarea>
-          </div>
-          <div>
-            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Status <span class="text-red-500">*</span></label>
-            <select formControlName="project_status_id_fk"
-                    class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-              @for (st of masters.statuses(); track st.status_id) {
-                <option [value]="st.status_id">{{ st.status_label || st.status_name }}</option>
-              }
-            </select>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Start <span class="text-red-500">*</span></label>
-              <input formControlName="project_start_date" type="date"
-                     class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-              @if (projectForm.get('project_start_date')?.invalid && projectForm.get('project_start_date')?.touched) {
-                <p class="text-red-600 text-2xs mt-1">Start date is required</p>
-              }
+         <form [formGroup]="projectForm" class="space-y-3">
+           <div>
+             <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Name <span class="text-red-500">*</span></label>
+             <input formControlName="project_name" type="text" placeholder="e.g. Mobile App"
+                    class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+             @if (projectForm.get('project_name')?.invalid && projectForm.get('project_name')?.touched) {
+               <p class="text-red-600 text-2xs mt-1">Name is required</p>
+             }
+           </div>
+           <div>
+             <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Description</label>
+             <textarea formControlName="project_description" placeholder="Project details..." rows="3"
+                    class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary"></textarea>
+           </div>
+           <div>
+             <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Status <span class="text-red-500">*</span></label>
+             <select formControlName="project_status_id_fk"
+                     class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+               @for (st of masters.statuses(); track st.status_id) {
+                 <option [value]="st.status_id">{{ st.status_label || st.status_name }}</option>
+               }
+             </select>
+           </div>
+           <div class="grid grid-cols-2 gap-3">
+             <div>
+               <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Start <span class="text-red-500">*</span></label>
+               <input formControlName="project_start_date" type="date"
+                      class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+               @if (projectForm.get('project_start_date')?.invalid && projectForm.get('project_start_date')?.touched) {
+                 <p class="text-red-600 text-2xs mt-1">Start date is required</p>
+               }
+             </div>
+             <div>
+               <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Due <span class="text-red-500">*</span></label>
+               <input formControlName="project_end_date" type="date"
+                      class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+               @if (projectForm.get('project_end_date')?.invalid && projectForm.get('project_end_date')?.touched) {
+                 <p class="text-red-600 text-2xs mt-1">Due date is required</p>
+               }
+             </div>
+           </div>
+            <div class="pt-4 border-t border-slate-100">
+              <div class="flex items-center justify-between mb-3">
+                <label class="block text-2xs font-bold text-slate-500 uppercase tracking-wider">Data Sources / References</label>
+                <button type="button" (click)="addArtifact()" 
+                        class="inline-flex items-center gap-1 text-2xs font-semibold text-primary bg-primary/10 hover:bg-primary/15 px-2 py-1 rounded transition-colors">
+                  <span class="material-symbols-outlined text-[14px]">add</span>
+                  Add reference
+                </button>
+              </div>
+              
+              <div formArrayName="artifacts" class="space-y-3">
+                <div *ngFor="let artifact of artifactsArray.controls; let i = index" [formGroupName]="i" 
+                     class="group relative bg-slate-50/50 border border-slate-100 rounded-xl p-3 hover:bg-slate-50 hover:border-slate-200 transition-all">
+                  
+                  <button type="button" (click)="removeArtifact(i)" 
+                          class="absolute top-2 right-2 p-1 text-slate-300 hover:text-red-500 rounded-md transition-colors" title="Remove">
+                    <span class="material-symbols-outlined text-[16px]">close</span>
+                  </button>
+
+                  <div class="grid grid-cols-12 gap-3">
+                    <div class="col-span-12 sm:col-span-5">
+                      <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Title <span class="text-red-500">*</span></label>
+                      <input formControlName="artifact_title" placeholder="e.g. Design Specs"
+                             class="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary bg-white">
+                    </div>
+                    <div class="col-span-12 sm:col-span-7 pr-6">
+                      <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Value / URL <span class="text-red-500">*</span></label>
+                      <input formControlName="artifact_value" placeholder="https://..."
+                             class="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary bg-white font-mono">
+                    </div>
+                    
+                    <div class="col-span-12 sm:col-span-4">
+                      <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Type <span class="text-red-500">*</span></label>
+                      <select formControlName="artifact_type"
+                              class="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary bg-white">
+                        <option value="url">Link / URL</option>
+                        <option value="text">Text / Snippet</option>
+                        <option value="credential">Credential</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    
+                    <div class="col-span-12 sm:col-span-8 flex items-end">
+                      <label class="flex items-center gap-2 cursor-pointer select-none py-1.5">
+                        <input type="checkbox" formControlName="is_sensitive" class="w-3.5 h-3.5 rounded text-primary focus:ring-primary/25">
+                        <span class="text-2xs font-medium text-slate-600">Mark as sensitive (hidden by default)</span>
+                      </label>
+                    </div>
+
+                    <div class="col-span-12">
+                      <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Short Description</label>
+                      <input formControlName="description" placeholder="Optional notes about this source..."
+                             class="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary bg-white">
+                    </div>
+                  </div>
+                </div>
+                
+                @if (artifactsArray.length === 0) {
+                  <div class="text-center py-6 border-2 border-dashed border-slate-100 rounded-xl">
+                    <p class="text-xs text-slate-400">No data sources added yet.</p>
+                  </div>
+                }
+              </div>
             </div>
-            <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Due <span class="text-red-500">*</span></label>
-              <input formControlName="project_end_date" type="date"
-                     class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-              @if (projectForm.get('project_end_date')?.invalid && projectForm.get('project_end_date')?.touched) {
-                <p class="text-red-600 text-2xs mt-1">Due date is required</p>
-              }
-            </div>
-          </div>
-        </form>
+         </form>
       }
       <ng-container drawerFooter>
         <button type="button" class="px-3 py-2 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg bg-white hover:bg-slate-50"
@@ -273,6 +341,97 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
       [pending]="saving()"
       (confirm)="confirmDeleteProject()"
       (cancel)="deleteTarget.set(null)" />
+
+    <!-- View Project Drawer -->
+    <app-drawer-panel
+      [open]="!!viewingProject()"
+      title="Project Details"
+      [subtitle]="viewingProject()?.project_name || ''"
+      size="md"
+      (closed)="viewingProject.set(null)"
+      (backdropClose)="viewingProject.set(null)">
+      @if (viewingProject(); as p) {
+        <div class="space-y-6">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Status</label>
+              <span class="px-2 py-0.5 rounded-md text-xs font-semibold" [class]="statusClass(p.project_status)">{{ p.project_status }}</span>
+            </div>
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Project ID</label>
+              <span class="text-xs font-mono text-slate-600">{{ p.project_id }}</span>
+            </div>
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Start Date</label>
+              <span class="text-xs text-slate-700 font-medium">{{ p.project_start_date || 'N/A' }}</span>
+            </div>
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Due Date</label>
+              <span class="text-xs text-slate-700 font-medium">{{ p.project_end_date || 'N/A' }}</span>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Description</label>
+            <div class="bg-white border border-slate-100 rounded-xl p-3 text-sm text-slate-600 leading-relaxed min-h-[80px]">
+              {{ p.project_description || 'No description provided.' }}
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase">Data Sources & References</label>
+              <span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-bold">{{ p.artifacts?.length || 0 }}</span>
+            </div>
+            
+            <div class="space-y-3">
+              @for (a of p.artifacts; track $index) {
+                <div class="group relative bg-white border border-slate-100 rounded-xl p-4 hover:border-primary/30 transition-all shadow-sm">
+                  <div class="flex items-start justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[18px] text-primary/60">
+                        {{ a.artifact_type === 'url' ? 'link' : a.artifact_type === 'credential' ? 'key' : 'description' }}
+                      </span>
+                      <h4 class="text-sm font-bold text-slate-800">{{ a.artifact_title }}</h4>
+                    </div>
+                    @if (a.is_sensitive) {
+                      <span class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 text-[10px] font-bold uppercase">
+                        <span class="material-symbols-outlined text-[12px]">lock</span>
+                        Sensitive
+                      </span>
+                    }
+                  </div>
+                  
+                  <div class="bg-slate-50 rounded-lg p-2.5 mb-2 font-mono text-xs break-all border border-slate-100">
+                    @if (a.is_sensitive) {
+                      <div class="flex items-center justify-between">
+                        <span class="text-slate-400 italic">Content hidden for security</span>
+                        <button (click)="copyToClipboard(a.artifact_value)" class="text-primary hover:underline font-bold">Copy</button>
+                      </div>
+                    } @else {
+                      <a *ngIf="a.artifact_type === 'url'" [href]="a.artifact_value" target="_blank" class="text-primary hover:underline">{{ a.artifact_value }}</a>
+                      <span *ngIf="a.artifact_type !== 'url'">{{ a.artifact_value }}</span>
+                    }
+                  </div>
+                  
+                  @if (a.description) {
+                    <p class="text-[11px] text-slate-500 italic">{{ a.description }}</p>
+                  }
+                </div>
+              } @empty {
+                <div class="text-center py-8 border-2 border-dashed border-slate-100 rounded-xl">
+                  <p class="text-xs text-slate-400">No data sources configured for this project.</p>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+      <ng-container drawerFooter>
+        <button type="button" class="w-full px-3 py-2 text-xs font-bold bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+                (click)="viewingProject.set(null)">Close View</button>
+      </ng-container>
+    </app-drawer-panel>
   `
 })
 export class TmProjectsComponent implements OnInit {
@@ -293,6 +452,7 @@ export class TmProjectsComponent implements OnInit {
 
   projectModalOpen = signal(false);
   editingProject = signal<Project | null>(null);
+  viewingProject = signal<Project | null>(null);
   deleteTarget = signal<Project | null>(null);
 
   projectForm = this.fb.group({
@@ -301,6 +461,7 @@ export class TmProjectsComponent implements OnInit {
     project_status_id_fk: ['', Validators.required],
     project_start_date: ['', Validators.required],
     project_end_date: ['', Validators.required],
+    artifacts: this.fb.array([])
   });
 
   constructor(
@@ -324,6 +485,7 @@ export class TmProjectsComponent implements OnInit {
     this.loading.set(true);
     this.api.getProjects(userId, 'TASKS').subscribe({
       next: (data) => {
+        console.log('Projects loaded with artifacts:', data);
         this.projects.set(data);
         this.loading.set(false);
         this.currentPage.set(1); // Reset to first page
@@ -344,6 +506,8 @@ export class TmProjectsComponent implements OnInit {
       { value: list.length, label: 'Projects' }
     ];
 
+    stats.push({ value: totalTasks, label: 'Tasks' });
+
     for (const st of this.masters.statuses()) {
       stats.push({
         value: list.filter(p => p.project_status === (st.status_label || st.status_name)).length,
@@ -351,7 +515,6 @@ export class TmProjectsComponent implements OnInit {
       });
     }
 
-    stats.push({ value: totalTasks, label: 'Tasks' });
 
     return stats;
   });
@@ -467,14 +630,27 @@ export class TmProjectsComponent implements OnInit {
   }
 
   statusClass(s?: string): string {
-    return {
-      Active: 'bg-emerald-100 text-emerald-800', Triage: 'bg-slate-100 text-slate-700',
-      'On Hold': 'bg-amber-100 text-amber-800', Completed: 'bg-stone-200 text-stone-800'
-    }[s || ''] ?? 'bg-slate-100 text-slate-600';
+    const status = (s || '').toLowerCase();
+    if (status === 'active' || status === 'in progress') return 'bg-emerald-100 text-emerald-800';
+    if (status === 'triage' || status === 'open') return 'bg-slate-100 text-slate-700';
+    if (status === 'on hold') return 'bg-amber-100 text-amber-800';
+    if (status === 'completed') return 'bg-stone-200 text-stone-800';
+    return 'bg-slate-100 text-slate-600';
+  }
+
+  viewProject(p: Project) {
+    this.viewingProject.set(p);
+  }
+
+  copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text);
+    this.toast.success('Copied to clipboard');
   }
 
   openProjectModal(row: Project | null) {
     this.editingProject.set(row);
+    
+    // 1. Reset form first (this clears everything)
     if (row) {
       this.projectForm.reset({
         project_name: row.project_name,
@@ -493,7 +669,42 @@ export class TmProjectsComponent implements OnInit {
         project_end_date: ''
       });
     }
+
+    // 2. Clear and repopulate artifacts AFTER reset
+    const artifactsArray = this.projectForm.get('artifacts') as FormArray;
+    artifactsArray.clear();
+    if (row && row.artifacts) {
+      row.artifacts.forEach(a => {
+        artifactsArray.push(this.fb.group({
+          artifact_title: [a.artifact_title, Validators.required],
+          artifact_value: [a.artifact_value, Validators.required],
+          artifact_type: [a.artifact_type || 'url', Validators.required],
+          description: [a.description || ''],
+          is_sensitive: [a.is_sensitive === true || (a.is_sensitive as any) === 'true' || (a.is_sensitive as any) === 'TRUE']
+        }));
+      });
+    }
+    
     this.projectModalOpen.set(true);
+  }
+
+  // Helper getter for artifacts FormArray
+  get artifactsArray(): FormArray {
+    return this.projectForm.get('artifacts') as FormArray;
+  }
+
+  addArtifact() {
+    this.artifactsArray.push(this.fb.group({
+      artifact_title: ['', Validators.required],
+      artifact_value: ['', Validators.required],
+      artifact_type: ['url', Validators.required],
+      description: [''],
+      is_sensitive: [false]
+    }));
+  }
+
+  removeArtifact(index: number) {
+    this.artifactsArray.removeAt(index);
   }
 
   closeProjectModal() {
@@ -515,6 +726,9 @@ export class TmProjectsComponent implements OnInit {
 
     this.saving.set(true);
 
+    // Prepare artifacts payload (filter out empty entries)
+    const artifactsPayload: ProjectArtifact[] = (v.artifacts || []).filter((a: any) => a.artifact_title && a.artifact_value) as ProjectArtifact[];
+
     if (cur) {
       const patch = {
         project_id: cur.project_id,
@@ -523,12 +737,13 @@ export class TmProjectsComponent implements OnInit {
         project_status_id_fk: v.project_status_id_fk!,
         project_start_date: v.project_start_date || '',
         project_end_date: v.project_end_date || '',
-        last_modified_by: userId
+        last_modified_by: userId,
+        artifacts: artifactsPayload
       };
 
       this.api.updateProject(patch).subscribe({
         next: () => {
-          this.fetchProjects(); // Reload to get updated totals/fields
+          this.fetchProjects();
           this.closeProjectModal();
           this.saving.set(false);
           this.toast.success('Project updated successfully.');
@@ -546,7 +761,8 @@ export class TmProjectsComponent implements OnInit {
         project_status_id_fk: v.project_status_id_fk!,
         project_start_date: v.project_start_date || '',
         project_end_date: v.project_end_date || '',
-        created_by: userId
+        created_by: userId,
+        artifacts: artifactsPayload
       };
 
       this.api.createProject(newProj).subscribe({

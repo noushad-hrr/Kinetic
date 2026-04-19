@@ -275,7 +275,7 @@ function generateProjectId() {
 
 // Returns next task_order_id (global across all projects, no gaps)
 function getNextTaskOrderId() {
-  var tasks = sheetToObjects('tasks');
+  var tasks = sheetToObjects('tasks_manager_tasks');
   if (!tasks.length) return 1;
   return tasks.reduce(function(m, t) {
     var n = parseInt(t.task_order_id, 10);
@@ -285,7 +285,7 @@ function getNextTaskOrderId() {
 
 // When a task's order_id changes, shift other tasks to fill/make room, maintaining no-gap sequence
 function reorderTask(taskId, newOrder) {
-  var sheet = getSheet('tasks');
+  var sheet = getSheet('tasks_manager_tasks');
   var data = sheet.getDataRange().getValues();
   var headers = data[0].map(function(h) { return String(h).trim(); });
   var idCol = headers.indexOf('task_id');
@@ -315,7 +315,7 @@ function reorderTask(taskId, newOrder) {
 
 // After a task is deleted, decrement all order_ids above it to close the gap
 function compactTaskOrderAfterDelete(deletedOrder) {
-  var sheet = getSheet('tasks');
+  var sheet = getSheet('tasks_manager_tasks');
   var data = sheet.getDataRange().getValues();
   var headers = data[0].map(function(h) { return String(h).trim(); });
   var orderCol = headers.indexOf('task_order_id');
@@ -347,7 +347,7 @@ function deleteRowsWhere(sheetName, field, value) {
 
 // Re-number all task_order_ids 1, 2, 3... preserving existing relative order
 function recompactAllTaskOrderIds() {
-  var sheet = getSheet('tasks');
+  var sheet = getSheet('tasks_manager_tasks');
   var data = sheet.getDataRange().getValues();
   if (data.length < 2) return;
   var headers = data[0].map(function(h) { return String(h).trim(); });
@@ -822,7 +822,7 @@ function handleGetDashboard(userId) {
 
   var projectIds = projects.map(function(p) { return p.project_id; });
 
-  var allTasks = sheetToObjects('tasks');
+  var allTasks = sheetToObjects('tasks_manager_tasks');
   var tasks = allTasks.filter(function(t) {
     return projectIds.indexOf(String(t.project_id_fk)) !== -1;
   });
@@ -911,19 +911,41 @@ function handleGetProjects(userId, category) {
     return accessibleProjectIds.indexOf(String(p.project_id)) !== -1;
   });
 
-  // Enrich with task counts and status details
-  var allTasks = sheetToObjects('tasks');
+  // Enrich with task counts, status details, and artifacts
+  var allTasks = sheetToObjects('tasks_manager_tasks');
   var statuses = sheetToObjects('status_master');
+  
+  // Robust lookup for artifacts sheet
+  var artifactSheetName = 'tasks_manager_project_artifacts';
+  try { getSheet(artifactSheetName); } catch(e) { artifactSheetName = 'project_artifacts'; }
+  
+  var allArtifacts = [];
+  try { 
+    allArtifacts = sheetToObjects(artifactSheetName); 
+  } catch(e) { 
+    Logger.log('Artifacts sheet not found: ' + e.message);
+  }
+
   var result = projects.map(function(p) {
     var pTasks = allTasks.filter(function(t) { return String(t.project_id_fk) === String(p.project_id); });
+    
+    // Filter artifacts by foreign key (try both new and old property names)
+    var pArtifacts = allArtifacts.filter(function(a) { 
+      var fk = a.tasks_manager_project_artifacts_id_fk || a.project_id_fk;
+      return String(fk) === String(p.project_id); 
+    });
+    
     var statusObj = statuses.find(function(s) { return String(s.status_id) === String(p.project_status_id_fk); });
+    
     return Object.assign({}, p, {
       project_status: statusObj ? (statusObj.status_label || statusObj.status_name) : 'Unknown',
       task_total: pTasks.length,
-      task_done: pTasks.filter(function(t) { return t.task_status === 'completed'; }).length
+      task_done: pTasks.filter(function(t) { return t.task_status === 'completed'; }).length,
+      artifacts: pArtifacts
     });
   });
 
+  Logger.log('Enriched ' + result.length + ' projects with artifacts from ' + artifactSheetName);
   return success(result);
 }
 
@@ -946,6 +968,11 @@ function handleCreateProject(body) {
   };
 
   appendRow('tasks_manager_projects', newProject);
+
+  // Save nested artifacts if provided
+  if (body.artifacts) {
+    saveProjectArtifacts(newProject.project_id, body.artifacts, body.created_by);
+  }
 
   // Auto-grant project access to the creator for both categories
   if (body.created_by) {
@@ -972,7 +999,34 @@ function handleUpdateProject(body) {
   body.last_modified_on = now();
   var updated = updateRowById('tasks_manager_projects', 'project_id', body.project_id, body);
   if (!updated) return error('Project not found', 404);
+
+  // Sync nested artifacts if provided
+  if (body.artifacts) {
+    saveProjectArtifacts(body.project_id, body.artifacts, body.last_modified_by);
+  }
+
   return success({ message: 'Project updated' });
+}
+
+// Helper: Sync project artifacts (delete and re-insert)
+function saveProjectArtifacts(projectId, artifacts, userId) {
+  deleteRowsWhere('tasks_manager_project_artifacts', 'tasks_manager_project_artifacts_id_fk', projectId);
+  if (artifacts && Array.isArray(artifacts)) {
+    artifacts.forEach(function(a) {
+      var artifact = {
+        tasks_manager_project_artifacts_id: generateId('PA', 'tasks_manager_project_artifacts', 'tasks_manager_project_artifacts_id'),
+        tasks_manager_project_artifacts_id_fk: projectId,
+        artifact_title: a.artifact_title,
+        artifact_value: a.artifact_value,
+        artifact_type: a.artifact_type,
+        description: a.description || '',
+        is_sensitive: a.is_sensitive === true || a.is_sensitive === 'true',
+        created_by: userId || a.created_by || '',
+        created_on: now()
+      };
+      appendRow('tasks_manager_project_artifacts', artifact);
+    });
+  }
 }
 
 function handleDeleteProject(projectId, userId) {
@@ -981,10 +1035,10 @@ function handleDeleteProject(projectId, userId) {
   if (!deleted) return error('Project not found', 404);
 
   // Cascade: delete all tasks, task artifacts, project artifacts, and mappings for this project
-  var projectTasks = sheetToObjects('tasks').filter(function(t) { return String(t.project_id_fk) === String(projectId); });
-  projectTasks.forEach(function(t) { deleteRowsWhere('task_artifacts', 'task_id_fk', t.task_id); });
-  deleteRowsWhere('tasks', 'project_id_fk', projectId);
-  deleteRowsWhere('project_artifacts', 'project_id_fk', projectId);
+  var projectTasks = sheetToObjects('tasks_manager_tasks').filter(function(t) { return String(t.project_id_fk) === String(projectId); });
+  projectTasks.forEach(function(t) { deleteRowsWhere('tasks_manager_task_artifacts', 'task_id_fk', t.task_id); });
+  deleteRowsWhere('tasks_manager_tasks', 'project_id_fk', projectId);
+  deleteRowsWhere('tasks_manager_project_artifacts', 'tasks_manager_project_artifacts_id_fk', projectId);
   deleteRowsWhere('user_project_mapping', 'project_id_fk', projectId);
 
   // Re-sequence task order IDs after bulk deletion
@@ -997,43 +1051,44 @@ function handleDeleteProject(projectId, userId) {
 
 function handleGetArtifacts(projectId) {
   if (!projectId) return error('project_id required', 400);
-  var artifacts = sheetToObjects('project_artifacts').filter(function(a) {
-    return String(a.project_id_fk) === String(projectId);
+  var artifacts = sheetToObjects('tasks_manager_project_artifacts').filter(function(a) {
+    return String(a.tasks_manager_project_artifacts_id_fk) === String(projectId);
   });
   return success(artifacts);
 }
 
 function handleCreateArtifact(body) {
-  if (!body.project_id_fk || !body.artifact_title || !body.artifact_value || !body.artifact_type) {
-    return error('project_id_fk, artifact_title, artifact_value, artifact_type are required', 400);
+  if (!body.tasks_manager_project_artifacts_id_fk || !body.artifact_title || !body.artifact_value || !body.artifact_type) {
+    return error('tasks_manager_project_artifacts_id_fk, artifact_title, artifact_value, artifact_type are required', 400);
   }
 
-  var newId = generateId('A', 'project_artifacts', 'project_artifact_id');
+  var newId = generateId('PA', 'tasks_manager_project_artifacts', 'tasks_manager_project_artifacts_id');
   var artifact = {
-    project_artifact_id: newId,
-    project_id_fk: body.project_id_fk,
+    tasks_manager_project_artifacts_id: newId,
+    tasks_manager_project_artifacts_id_fk: body.tasks_manager_project_artifacts_id_fk,
     artifact_title: body.artifact_title,
     artifact_value: body.artifact_value,
     artifact_type: body.artifact_type,
-    is_sensitive: body.is_sensitive || false,
+    description: body.description || '',
+    is_sensitive: body.is_sensitive === true || body.is_sensitive === 'true',
     created_by: body.created_by,
     created_on: now()
   };
 
-  appendRow('project_artifacts', artifact);
+  appendRow('tasks_manager_project_artifacts', artifact);
   return success(artifact);
 }
 
 function handleUpdateArtifact(body) {
-  if (!body.project_artifact_id) return error('project_artifact_id required', 400);
-  var updated = updateRowById('project_artifacts', 'project_artifact_id', body.project_artifact_id, body);
+  if (!body.tasks_manager_project_artifacts_id) return error('tasks_manager_project_artifacts_id required', 400);
+  var updated = updateRowById('tasks_manager_project_artifacts', 'tasks_manager_project_artifacts_id', body.tasks_manager_project_artifacts_id, body);
   if (!updated) return error('Artifact not found', 404);
   return success({ message: 'Artifact updated' });
 }
 
 function handleDeleteArtifact(artifactId) {
-  if (!artifactId) return error('project_artifact_id required', 400);
-  var deleted = deleteRowById('project_artifacts', 'project_artifact_id', artifactId);
+  if (!artifactId) return error('tasks_manager_project_artifacts_id required', 400);
+  var deleted = deleteRowById('tasks_manager_project_artifacts', 'tasks_manager_project_artifacts_id', artifactId);
   if (!deleted) return error('Artifact not found', 404);
   return success({ message: 'Artifact deleted' });
 }
@@ -1042,7 +1097,7 @@ function handleDeleteArtifact(artifactId) {
 
 function handleGetTaskArtifacts(taskId) {
   if (!taskId) return error('task_id required', 400);
-  var artifacts = sheetToObjects('task_artifacts').filter(function(a) {
+  var artifacts = sheetToObjects('tasks_manager_task_artifacts').filter(function(a) {
     return String(a.task_id_fk) === String(taskId);
   });
   return success(artifacts);
@@ -1052,7 +1107,7 @@ function handleCreateTaskArtifact(body) {
   if (!body.task_id_fk || !body.artifact_title || !body.artifact_value || !body.artifact_type) {
     return error('task_id_fk, artifact_title, artifact_value, artifact_type are required', 400);
   }
-  var newId = generateId('TA', 'task_artifacts', 'task_artifact_id');
+  var newId = generateId('TA', 'tasks_manager_task_artifacts', 'task_artifact_id');
   var artifact = {
     task_artifact_id: newId,
     task_id_fk: body.task_id_fk,
@@ -1063,20 +1118,20 @@ function handleCreateTaskArtifact(body) {
     created_by: body.created_by,
     created_on: now()
   };
-  appendRow('task_artifacts', artifact);
+  appendRow('tasks_manager_task_artifacts', artifact);
   return success(artifact);
 }
 
 function handleUpdateTaskArtifact(body) {
   if (!body.task_artifact_id) return error('task_artifact_id required', 400);
-  var updated = updateRowById('task_artifacts', 'task_artifact_id', body.task_artifact_id, body);
+  var updated = updateRowById('tasks_manager_task_artifacts', 'task_artifact_id', body.task_artifact_id, body);
   if (!updated) return error('Artifact not found', 404);
   return success({ message: 'Artifact updated' });
 }
 
 function handleDeleteTaskArtifact(artifactId) {
   if (!artifactId) return error('task_artifact_id required', 400);
-  var deleted = deleteRowById('task_artifacts', 'task_artifact_id', artifactId);
+  var deleted = deleteRowById('tasks_manager_task_artifacts', 'task_artifact_id', artifactId);
   if (!deleted) return error('Artifact not found', 404);
   return success({ message: 'Artifact deleted' });
 }
@@ -1100,7 +1155,7 @@ function handleGetTasks(userId, projectIdsParam) {
     });
   }
 
-  var allTasks = sheetToObjects('tasks');
+  var allTasks = sheetToObjects('tasks_manager_tasks');
   var tasks = filterIds ? allTasks.filter(function(t) {
     return filterIds.indexOf(String(t.project_id_fk)) !== -1;
   }) : allTasks;
@@ -1117,7 +1172,7 @@ function handleCreateTask(body) {
     if (!body.task_assignees) return error('task_assignees is required when status is not triage', 400);
   }
 
-  var newId = generateId('KT-', 'tasks', 'task_id');
+  var newId = generateId('KT-', 'tasks_manager_tasks', 'task_id');
   var task = {
     task_id: newId,
     project_id_fk: body.project_id_fk,
@@ -1145,7 +1200,7 @@ function handleCreateTask(body) {
     task.task_status = 'closed';
   }
 
-  appendRow('tasks', task);
+  appendRow('tasks_manager_tasks', task);
   return success(task);
 }
 
@@ -1178,7 +1233,7 @@ function handleUpdateTask(body) {
   }
 
   body.last_modified_on = now();
-  var updated = updateRowById('tasks', 'task_id', body.task_id, body);
+  var updated = updateRowById('tasks_manager_tasks', 'task_id', body.task_id, body);
   if (!updated) return error('Task not found', 404);
   return success({ message: 'Task updated' });
 }
@@ -1187,15 +1242,15 @@ function handleDeleteTask(taskId) {
   if (!taskId) return error('task_id required', 400);
 
   // Capture order_id before deleting so we can compact the sequence
-  var tasks = sheetToObjects('tasks');
+  var tasks = sheetToObjects('tasks_manager_tasks');
   var task = tasks.find(function(t) { return String(t.task_id) === String(taskId); });
   var deletedOrder = task ? parseInt(task.task_order_id, 10) : NaN;
 
-  var deleted = deleteRowById('tasks', 'task_id', taskId);
+  var deleted = deleteRowById('tasks_manager_tasks', 'task_id', taskId);
   if (!deleted) return error('Task not found', 404);
 
   // Cascade: delete task artifacts
-  deleteRowsWhere('task_artifacts', 'task_id_fk', taskId);
+  deleteRowsWhere('tasks_manager_task_artifacts', 'task_id_fk', taskId);
 
   // Close the gap in the order sequence
   if (!isNaN(deletedOrder)) {
@@ -1208,14 +1263,14 @@ function handleDeleteTask(taskId) {
 // ─── AUTO-CLOSE OVERDUE ───────────────────────────────────────────────────────
 
 function handleAutoCloseOverdue() {
-  var tasks = sheetToObjects('tasks');
+  var tasks = sheetToObjects('tasks_manager_tasks');
   var today = now();
   var count = 0;
 
   tasks.forEach(function(t) {
     if (t.task_end_date && String(t.task_end_date) < today
         && t.task_status !== 'completed' && t.task_status !== 'closed') {
-      updateRowById('tasks', 'task_id', t.task_id, {
+      updateRowById('tasks_manager_tasks', 'task_id', t.task_id, {
         task_status: 'closed',
         last_modified_on: today
       });

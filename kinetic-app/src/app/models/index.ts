@@ -38,6 +38,8 @@ export interface AdminUser {
 }
 
 // ─── Projects ──────────────────────────────────────────────────────────────────
+
+
 export interface Project {
   project_id: string;
   project_name: string;
@@ -46,12 +48,30 @@ export interface Project {
   project_status?: string;
   project_start_date: string;
   project_end_date: string;
+  // New: list of artifacts (data source references)
+  artifacts?: ProjectArtifact[];
   created_by: string;
   created_on: string;
   last_modified_by?: string;
   last_modified_on?: string;
   task_total?: number;
   task_done?: number;
+}
+
+
+// ─── Project Artifacts ───────────────────────────────────────────────────────
+export interface ProjectArtifact {
+  // Primary key id (optional, assigned by backend)
+  tasks_manager_project_artifacts_id?: number;
+  // Foreign key to project id
+  tasks_manager_project_artifacts_id_fk?: string;
+  artifact_title: string;
+  artifact_value: string;
+  artifact_type: string;
+  description?: string;
+  is_sensitive?: boolean;
+  created_by?: string;
+  created_on?: string;
 }
 
 export interface UserProjectMapping {
