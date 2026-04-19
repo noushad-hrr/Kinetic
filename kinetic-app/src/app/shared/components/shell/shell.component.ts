@@ -57,8 +57,9 @@ const TITLE_MAP: Record<string, PageInfo> = {
         <!-- Nav -->
         <nav class="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
 
-          <a routerLink="/dashboard" routerLinkActive="bg-primary text-white"
-             class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-surface-container-low dark:text-neutral-300 dark:hover:bg-zinc-900 transition-colors"
+          <a routerLink="/dashboard" routerLinkActive="bg-primary" #rlaDash="routerLinkActive"
+             [ngClass]="rlaDash.isActive ? 'text-white' : 'text-slate-600 dark:text-neutral-300'"
+             class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium hover:bg-surface-container-low dark:hover:bg-zinc-900 transition-colors"
              (click)="sidebarOpen.set(false)">
             <span class="material-symbols-outlined text-[18px]">dashboard</span>
             Dashboard
@@ -76,16 +77,18 @@ const TITLE_MAP: Record<string, PageInfo> = {
             </button>
             @if (tasksOpen()) {
               <div class="mt-0.5 ml-4 pl-2.5 border-l-2 border-surface-container-high dark:border-[#3c3c3c] space-y-0.5">
-                <a routerLink="/tasks-manager/projects" routerLinkActive="bg-primary text-white"
-                   class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-surface-container-low dark:text-neutral-300 dark:hover:bg-[#2a2d2e] transition-colors"
+                <a routerLink="/tasks-manager/projects" routerLinkActive="bg-primary" #rlaTP="routerLinkActive"
+                   [ngClass]="rlaTP.isActive ? 'text-white' : 'text-slate-600 dark:text-neutral-300'"
+                   class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium hover:bg-surface-container-low dark:hover:bg-[#2a2d2e] transition-colors"
                    (click)="sidebarOpen.set(false)">
                   <span class="material-symbols-outlined text-[15px]">folder_open</span>
                   Projects
                 </a>
                 <a routerLink="/tasks-manager/tasks"
-                   routerLinkActive="bg-primary text-white"
+                   routerLinkActive="bg-primary" #rlaTT="routerLinkActive"
                    [routerLinkActiveOptions]="{ paths: 'exact', queryParams: 'ignored', fragment: 'ignored', matrixParams: 'ignored' }"
-                   class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-surface-container-low dark:text-neutral-300 dark:hover:bg-[#2a2d2e] transition-colors"
+                   [ngClass]="rlaTT.isActive ? 'text-white' : 'text-slate-600 dark:text-neutral-300'"
+                   class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium hover:bg-surface-container-low dark:hover:bg-[#2a2d2e] transition-colors"
                    (click)="sidebarOpen.set(false)">
                   <span class="material-symbols-outlined text-[15px]">calendar_view_day</span>
                   Tasks
@@ -106,14 +109,16 @@ const TITLE_MAP: Record<string, PageInfo> = {
             </button>
             @if (budgetOpen()) {
               <div class="mt-0.5 ml-4 pl-2.5 border-l-2 border-surface-container-high dark:border-[#3c3c3c] space-y-0.5">
-                <a routerLink="/budget-manager/projects" routerLinkActive="bg-primary text-white"
-                   class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-surface-container-low dark:text-neutral-300 dark:hover:bg-[#2a2d2e] transition-colors"
+                <a routerLink="/budget-manager/projects" routerLinkActive="bg-primary" #rlaBP="routerLinkActive"
+                   [ngClass]="rlaBP.isActive ? 'text-white' : 'text-slate-600 dark:text-neutral-300'"
+                   class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium hover:bg-surface-container-low dark:hover:bg-[#2a2d2e] transition-colors"
                    (click)="sidebarOpen.set(false)">
                   <span class="material-symbols-outlined text-[15px]">folder_open</span>
                   Projects
                 </a>
-                <a routerLink="/budget-manager/budget" routerLinkActive="bg-primary text-white"
-                   class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-surface-container-low dark:text-neutral-300 dark:hover:bg-[#2a2d2e] transition-colors"
+                <a routerLink="/budget-manager/budget" routerLinkActive="bg-primary" #rlaBB="routerLinkActive"
+                   [ngClass]="rlaBB.isActive ? 'text-white' : 'text-slate-600 dark:text-neutral-300'"
+                   class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium hover:bg-surface-container-low dark:hover:bg-[#2a2d2e] transition-colors"
                    (click)="sidebarOpen.set(false)">
                   <span class="material-symbols-outlined text-[15px]">account_balance_wallet</span>
                   Budget
@@ -122,8 +127,9 @@ const TITLE_MAP: Record<string, PageInfo> = {
             }
           </div>
 
-          <a routerLink="/settings" routerLinkActive="bg-primary text-white"
-             class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-surface-container-low dark:text-neutral-300 dark:hover:bg-[#2a2d2e] transition-colors"
+          <a routerLink="/settings" routerLinkActive="bg-primary" #rlaSettings="routerLinkActive"
+             [ngClass]="rlaSettings.isActive ? 'text-white' : 'text-slate-600 dark:text-neutral-300'"
+             class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium hover:bg-surface-container-low dark:hover:bg-[#2a2d2e] transition-colors"
              (click)="sidebarOpen.set(false)">
             <span class="material-symbols-outlined text-[18px]">settings</span>
             Settings
@@ -142,20 +148,21 @@ const TITLE_MAP: Record<string, PageInfo> = {
               </button>
               @if (adminOpen()) {
                 <div class="mt-0.5 ml-4 pl-2.5 border-l-2 border-surface-container-high dark:border-[#3c3c3c] space-y-0.5">
-                  @if (auth.hasPermission('USER_MANAGE')) {
-                    <a routerLink="/admin/users" routerLinkActive="bg-primary text-white"
-                       class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-surface-container-low dark:text-neutral-300 dark:hover:bg-[#2a2d2e] transition-colors"
-                       (click)="sidebarOpen.set(false)">
-                      <span class="material-symbols-outlined text-[15px]">manage_accounts</span>
-                      Users
-                    </a>
-                  }
                   @if (auth.hasPermission('ROLE_MANAGE')) {
-                    <a routerLink="/admin/roles" routerLinkActive="bg-primary text-white"
-                       class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:bg-surface-container-low dark:text-neutral-300 dark:hover:bg-[#2a2d2e] transition-colors"
+                    <a routerLink="/admin/roles" routerLinkActive="bg-primary" #rlaRoles="routerLinkActive"
+                       [ngClass]="rlaRoles.isActive ? 'text-white' : 'text-slate-600 dark:text-neutral-300'"
+                       class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium hover:bg-surface-container-low dark:hover:bg-[#2a2d2e] transition-colors"
                        (click)="sidebarOpen.set(false)">
                       <span class="material-symbols-outlined text-[15px]">admin_panel_settings</span>
                       Roles & Permissions
+                    </a>
+                  }@if (auth.hasPermission('USER_MANAGE')) {
+                    <a routerLink="/admin/users" routerLinkActive="bg-primary" #rlaUsers="routerLinkActive"
+                       [ngClass]="rlaUsers.isActive ? 'text-white' : 'text-slate-600 dark:text-neutral-300'"
+                       class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium hover:bg-surface-container-low dark:hover:bg-[#2a2d2e] transition-colors"
+                       (click)="sidebarOpen.set(false)">
+                      <span class="material-symbols-outlined text-[15px]">manage_accounts</span>
+                      Users
                     </a>
                   }
                 </div>
