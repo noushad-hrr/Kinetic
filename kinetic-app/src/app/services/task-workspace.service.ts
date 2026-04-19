@@ -46,29 +46,29 @@ export class TaskWorkspaceService {
   }
 
   readonly projects = signal<TmProjectRow[]>([
-    { id: 'KP-0001', name: 'Web Revamp',         status: 'Active',    done: 12, total: 18, start: 'Mar 01', due: 'Apr 30' },
-    { id: 'KP-0002', name: 'Mobile App',          status: 'Active',    done: 7,  total: 15, start: 'Feb 15', due: 'May 15' },
-    { id: 'KP-0003', name: 'Backend Services',    status: 'Triage',    done: 3,  total: 10, start: 'Apr 01', due: ''       },
-    { id: 'KP-0004', name: 'Content Strategy',    status: 'Active',    done: 9,  total: 12, start: 'Jan 10', due: 'Apr 25' },
-    { id: 'KP-0005', name: 'Infrastructure',      status: 'On Hold',   done: 2,  total: 8,  start: 'Mar 20', due: ''       },
-    { id: 'KP-0006', name: 'Customer Portal',     status: 'Active',    done: 5,  total: 20, start: 'Mar 15', due: 'Jun 01' },
-    { id: 'KP-0007', name: 'Analytics Dashboard', status: 'Triage',    done: 0,  total: 6,  start: 'Apr 10', due: ''       },
-    { id: 'KP-0008', name: 'Legacy Migration',    status: 'Completed', done: 15, total: 15, start: 'Jan 01', due: 'Mar 31' },
+    { id: 'KP-0001', name: 'Test', status: 'Active', done: 12, total: 18, start: 'Mar 01', due: 'Apr 30' },
+    { id: 'KP-0002', name: 'Mobile App', status: 'Active', done: 7, total: 15, start: 'Feb 15', due: 'May 15' },
+    { id: 'KP-0003', name: 'Backend Services', status: 'Triage', done: 3, total: 10, start: 'Apr 01', due: '' },
+    { id: 'KP-0004', name: 'Content Strategy', status: 'Active', done: 9, total: 12, start: 'Jan 10', due: 'Apr 25' },
+    { id: 'KP-0005', name: 'Infrastructure', status: 'On Hold', done: 2, total: 8, start: 'Mar 20', due: '' },
+    { id: 'KP-0006', name: 'Customer Portal', status: 'Active', done: 5, total: 20, start: 'Mar 15', due: 'Jun 01' },
+    { id: 'KP-0007', name: 'Analytics Dashboard', status: 'Triage', done: 0, total: 6, start: 'Apr 10', due: '' },
+    { id: 'KP-0008', name: 'Legacy Migration', status: 'Completed', done: 15, total: 15, start: 'Jan 01', due: 'Mar 31' },
   ]);
 
   readonly tasks = signal<TmTaskRow[]>([
-    { id: 'KT-0031', projectId: 'KP-0001', title: 'Homepage redesign',            status: 'In Progress', priority: 'High',   assignee: 'Alex Sterling',  due: 'Apr 15', dueDate: '2026-04-15', scheduleStartMins: 9 * 60 + 30,  scheduleDurationMins: 90 },
-    { id: 'KT-0032', projectId: 'KP-0003', title: 'API endpoint integration',     status: 'Open',        priority: 'Medium', assignee: 'Sarah Johnson',  due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 11 * 60,       scheduleDurationMins: 60 },
-    { id: 'KT-0028', projectId: 'KP-0005', title: 'Database migration script',    status: 'Overdue',     priority: 'High',   assignee: 'Liam Nguyen',    due: 'Apr 10', dueDate: '2026-04-10', scheduleStartMins: 8 * 60 + 30,   scheduleDurationMins: 45 },
-    { id: 'KT-0033', projectId: 'KP-0004', title: 'Copy review — landing page',   status: 'Open',        priority: 'Low',    assignee: 'Priya Kumar',    due: 'Apr 22', dueDate: '2026-04-22', scheduleStartMins: 14 * 60,       scheduleDurationMins: 40 },
-    { id: 'KT-0030', projectId: 'KP-0002', title: 'Bug fix #231 crash on login',  status: 'In Progress', priority: 'High',   assignee: 'James Hart',     due: 'Apr 14', dueDate: '2026-04-14', scheduleStartMins: 10 * 60,       scheduleDurationMins: 75 },
-    { id: 'KT-0034', projectId: 'KP-0001', title: 'Navigation bar responsive',    status: 'Open',        priority: 'Medium', assignee: 'Alex Sterling',  due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 15 * 60 + 30, scheduleDurationMins: 50 },
-    { id: 'KT-0035', projectId: 'KP-0003', title: 'Sprint retrospective notes',   status: 'Completed',   priority: 'Low',    assignee: 'Sarah Johnson',  due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 10 * 60,       scheduleDurationMins: 40 },
-    { id: 'KT-0036', projectId: 'KP-0004', title: 'Release notes draft',          status: 'Open',        priority: 'Medium', assignee: 'Priya Kumar',    due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 12 * 60,       scheduleDurationMins: 55 },
-    { id: 'KT-0019', projectId: 'KP-0002', title: 'QA report submission',         status: 'Overdue',     priority: 'High',   assignee: 'Liam Nguyen',    due: 'Apr 08', dueDate: '2026-04-08', scheduleStartMins: 9 * 60,        scheduleDurationMins: 50 },
-    { id: 'KT-0022', projectId: 'KP-0001', title: 'Design handoff to dev',        status: 'Overdue',     priority: 'Medium', assignee: 'Alex Sterling',  due: 'Apr 09', dueDate: '2026-04-09', scheduleStartMins: 13 * 60 + 15, scheduleDurationMins: 60 },
-    { id: 'KT-0025', projectId: 'KP-0005', title: 'Setup CI/CD pipeline',         status: 'Triage',      priority: 'High',   assignee: 'James Hart',     due: '',       dueDate: '2026-04-20', scheduleStartMins: 16 * 60,       scheduleDurationMins: 45 },
-    { id: 'KT-0027', projectId: 'KP-0002', title: 'User onboarding flow',         status: 'Triage',      priority: 'Medium', assignee: 'Priya Kumar',    due: '',       dueDate: '2026-04-25', scheduleStartMins: 11 * 60 + 45, scheduleDurationMins: 50 },
+    { id: 'KT-0031', projectId: 'KP-0001', title: 'Homepage redesign', status: 'In Progress', priority: 'High', assignee: 'Alex Sterling', due: 'Apr 15', dueDate: '2026-04-15', scheduleStartMins: 9 * 60 + 30, scheduleDurationMins: 90 },
+    { id: 'KT-0032', projectId: 'KP-0003', title: 'API endpoint integration', status: 'Open', priority: 'Medium', assignee: 'Sarah Johnson', due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 11 * 60, scheduleDurationMins: 60 },
+    { id: 'KT-0028', projectId: 'KP-0005', title: 'Database migration script', status: 'Overdue', priority: 'High', assignee: 'Liam Nguyen', due: 'Apr 10', dueDate: '2026-04-10', scheduleStartMins: 8 * 60 + 30, scheduleDurationMins: 45 },
+    { id: 'KT-0033', projectId: 'KP-0004', title: 'Copy review — landing page', status: 'Open', priority: 'Low', assignee: 'Priya Kumar', due: 'Apr 22', dueDate: '2026-04-22', scheduleStartMins: 14 * 60, scheduleDurationMins: 40 },
+    { id: 'KT-0030', projectId: 'KP-0002', title: 'Bug fix #231 crash on login', status: 'In Progress', priority: 'High', assignee: 'James Hart', due: 'Apr 14', dueDate: '2026-04-14', scheduleStartMins: 10 * 60, scheduleDurationMins: 75 },
+    { id: 'KT-0034', projectId: 'KP-0001', title: 'Navigation bar responsive', status: 'Open', priority: 'Medium', assignee: 'Alex Sterling', due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 15 * 60 + 30, scheduleDurationMins: 50 },
+    { id: 'KT-0035', projectId: 'KP-0003', title: 'Sprint retrospective notes', status: 'Completed', priority: 'Low', assignee: 'Sarah Johnson', due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 10 * 60, scheduleDurationMins: 40 },
+    { id: 'KT-0036', projectId: 'KP-0004', title: 'Release notes draft', status: 'Open', priority: 'Medium', assignee: 'Priya Kumar', due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 12 * 60, scheduleDurationMins: 55 },
+    { id: 'KT-0019', projectId: 'KP-0002', title: 'QA report submission', status: 'Overdue', priority: 'High', assignee: 'Liam Nguyen', due: 'Apr 08', dueDate: '2026-04-08', scheduleStartMins: 9 * 60, scheduleDurationMins: 50 },
+    { id: 'KT-0022', projectId: 'KP-0001', title: 'Design handoff to dev', status: 'Overdue', priority: 'Medium', assignee: 'Alex Sterling', due: 'Apr 09', dueDate: '2026-04-09', scheduleStartMins: 13 * 60 + 15, scheduleDurationMins: 60 },
+    { id: 'KT-0025', projectId: 'KP-0005', title: 'Setup CI/CD pipeline', status: 'Triage', priority: 'High', assignee: 'James Hart', due: '', dueDate: '2026-04-20', scheduleStartMins: 16 * 60, scheduleDurationMins: 45 },
+    { id: 'KT-0027', projectId: 'KP-0002', title: 'User onboarding flow', status: 'Triage', priority: 'Medium', assignee: 'Priya Kumar', due: '', dueDate: '2026-04-25', scheduleStartMins: 11 * 60 + 45, scheduleDurationMins: 50 },
   ]);
 
   projectById(id: string): TmProjectRow | undefined {

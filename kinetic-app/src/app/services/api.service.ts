@@ -5,7 +5,7 @@ import { map, catchError } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import {
   ApiResponse, SessionUser, Masters,
-  Role, Permission, AdminUser
+  Role, Permission, AdminUser, Project, UserProjectMapping
 } from '../models';
 
 @Injectable({ providedIn: 'root' })
@@ -46,7 +46,7 @@ export class ApiService {
   // ─── Auth ────────────────────────────────────────────────────────────────────
 
   login(username: string, password: string) {
-    return this.call<{ user: SessionUser; permissions: string[] }>(
+    return this.call<{ user: SessionUser; permissions: string[]; tasksProjectIds: string[]; budgetProjectIds: string[] }>(
       'loginWithRBAC', { username, password }
     );
   }
@@ -65,9 +65,6 @@ export class ApiService {
     return this.call<{ message: string }>('updateRole', { role_id: roleId }, data);
   }
 
-  deleteRole(roleId: string) {
-    return this.call<{ message: string }>('deleteRole', { role_id: roleId });
-  }
 
   // ─── Admin: Permissions ───────────────────────────────────────────────────────
 
@@ -101,6 +98,40 @@ export class ApiService {
 
   deleteUser(userId: string) {
     return this.call<{ message: string }>('deleteUser', { user_id: userId });
+  }
+
+  // ─── Projects ────────────────────────────────────────────────────────────────
+
+  getProjects(userId: string, category: 'TASKS' | 'BUDGET' = 'TASKS') {
+    return this.call<Project[]>('getProjects', { user_id: userId, category });
+  }
+
+  createProject(data: Partial<Project>) {
+    return this.call<Project>('createProject', {}, data);
+  }
+
+  updateProject(data: Partial<Project>) {
+    return this.call<{ message: string }>('updateProject', {}, data);
+  }
+
+  deleteProject(projectId: string, userId: string) {
+    return this.call<{ message: string }>('deleteProject', { project_id: projectId, user_id: userId });
+  }
+
+  getAllProjects() {
+    return this.call<Project[]>('getAllProjects');
+  }
+
+  getUserProjectMappings(userId: string) {
+    return this.call<UserProjectMapping[]>('getUserProjectMappings', { user_id: userId });
+  }
+
+  assignUserToProject(userId: string, projectId: string, category: 'TASKS' | 'BUDGET') {
+    return this.call<UserProjectMapping>('assignUserToProject', {}, { user_id: userId, project_id: projectId, project_category: category });
+  }
+
+  removeUserFromProject(mappingId: string) {
+    return this.call<{ message: string }>('removeUserFromProject', { mapping_id: mappingId });
   }
 
   // ─── Masters ─────────────────────────────────────────────────────────────────

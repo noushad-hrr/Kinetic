@@ -5,13 +5,12 @@ import { ApiService } from '../../services/api.service';
 import { MastersService } from '../../services/masters.service';
 import { AuthService } from '../../services/auth.service';
 import { Role, Permission } from '../../models';
-import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialog.component';
 import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.component';
 
 @Component({
   selector: 'app-admin-roles',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, ConfirmDialogComponent, DrawerPanelComponent],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, DrawerPanelComponent],
   host: { class: 'flex flex-1 flex-col min-h-0 w-full' },
   template: `
     <div class="flex flex-col flex-1 min-h-0 p-4 max-w-7xl w-full mx-auto gap-4">
@@ -64,7 +63,12 @@ import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.co
                             [class]="isSelected(role) ? 'text-white' : 'text-slate-500'">shield_person</span>
                     </div>
                     <div class="min-w-0">
-                      <p class="font-medium text-slate-800 text-xs">{{ role.role_name }}</p>
+                      <div class="flex items-center gap-1.5">
+                        <p class="font-medium text-xs" [class]="isActive(role) ? 'text-slate-800' : 'text-slate-400'">{{ role.role_name }}</p>
+                        @if (!isActive(role)) {
+                          <span class="text-2xs font-medium px-1 py-0.5 rounded bg-slate-100 text-slate-400">Inactive</span>
+                        }
+                      </div>
                       <p class="text-2xs text-slate-400 truncate">{{ role.role_description }}</p>
                     </div>
                   </div>
@@ -73,9 +77,16 @@ import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.co
                             title="Edit" (click)="openEdit(role); $event.stopPropagation()">
                       <span class="material-symbols-outlined text-[15px]">edit</span>
                     </button>
-                    <button class="p-1 text-slate-400 rounded transition-colors hover:text-red-500 hover:bg-red-50"
-                            title="Delete" (click)="openDeleteRole(role); $event.stopPropagation()">
-                      <span class="material-symbols-outlined text-[15px]">delete</span>
+                    <button class="p-1 text-slate-400 rounded transition-colors disabled:opacity-40"
+                            [class]="isActive(role) ? 'hover:text-amber-500 hover:bg-amber-50' : 'hover:text-green-600 hover:bg-green-50'"
+                            [title]="isActive(role) ? 'Deactivate' : 'Activate'"
+                            [disabled]="togglingId() === role.role_id"
+                            (click)="toggleStatus(role); $event.stopPropagation()">
+                      @if (togglingId() === role.role_id) {
+                        <span class="material-symbols-outlined text-[15px] animate-spin">progress_activity</span>
+                      } @else {
+                        <span class="material-symbols-outlined text-[15px]">{{ isActive(role) ? 'person_off' : 'person' }}</span>
+                      }
                     </button>
                   </div>
                 </div>
@@ -170,14 +181,6 @@ import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.co
       </div>
     </app-drawer-panel>
 
-    <app-confirm-dialog
-      [open]="!!deleteTarget()"
-      title="Delete role?"
-      [message]="deleteTarget() ? 'Remove “' + deleteTarget()!.role_name + '” permanently? Users with this role may lose access.' : ''"
-      confirmLabel="Delete"
-      [pending]="deletePending()"
-      (confirm)="confirmDeleteRole()"
-      (cancel)="deleteTarget.set(null)" />
   `
 })
 export class RolesComponent implements OnInit {
@@ -197,8 +200,7 @@ export class RolesComponent implements OnInit {
   form!: FormGroup;
 
   permsDirty = signal(false);
-  deleteTarget = signal<Role | null>(null);
-  deletePending = signal(false);
+  togglingId = signal<string | null>(null);
 
   constructor(
     private api: ApiService,
@@ -323,24 +325,21 @@ export class RolesComponent implements OnInit {
     }
   }
 
-  openDeleteRole(role: Role) {
-    this.deleteTarget.set(role);
+  isActive(role: Role): boolean {
+    return String(role.is_active).toUpperCase() === 'TRUE' || role.is_active === true;
   }
 
-  confirmDeleteRole() {
-    const role = this.deleteTarget();
-    if (!role) return;
-    this.deletePending.set(true);
-    this.api.deleteRole(role.role_id).subscribe({
+  toggleStatus(role: Role) {
+    const newStatus = !this.isActive(role);
+    this.togglingId.set(role.role_id);
+    this.api.updateRole(role.role_id, { is_active: newStatus }).subscribe({
       next: () => {
-        this.deletePending.set(false);
-        this.deleteTarget.set(null);
-        if (this.selectedRole()?.role_id === role.role_id) this.selectedRole.set(null);
+        this.togglingId.set(null);
         this.loadRoles();
         this.masters.reload();
       },
       error: (e: Error) => {
-        this.deletePending.set(false);
+        this.togglingId.set(null);
         this.errorMsg.set(e.message);
       }
     });

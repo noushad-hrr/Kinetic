@@ -15,9 +15,9 @@ export class AdminRedirectComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    if (this.auth.hasPermission('USER_MANAGE')) {
+    if (this.auth.hasPermission('USER_READ')) {
       void this.router.navigateByUrl('/admin/users', { replaceUrl: true });
-    } else if (this.auth.hasPermission('ROLE_MANAGE')) {
+    } else if (this.auth.hasPermission('ROLE_READ')) {
       void this.router.navigateByUrl('/admin/roles', { replaceUrl: true });
     } else {
       void this.router.navigateByUrl('/tasks-manager/tasks?view=day', { replaceUrl: true });

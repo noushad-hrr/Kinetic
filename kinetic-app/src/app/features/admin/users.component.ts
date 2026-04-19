@@ -1,10 +1,11 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { forkJoin } from 'rxjs';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { MastersService } from '../../services/masters.service';
-import { AdminUser } from '../../models';
+import { AdminUser, Project, UserProjectMapping } from '../../models';
 import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.component';
 
 @Component({
@@ -118,7 +119,7 @@ import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.co
       [open]="drawerOpen()"
       [title]="editingUser() ? 'Edit user' : 'Add user'"
       subtitle="Account details and role assignment apply on the next sign-in for permission changes."
-      size="sm"
+      size="md"
       (closed)="closeDrawer()"
       (backdropClose)="closeDrawer()">
       @if (form) {
@@ -185,6 +186,53 @@ import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.co
 
         </form>
       }
+
+      @if (editingUser()) {
+        <div class="mt-5 border-t border-slate-100 pt-4 space-y-4">
+          @if (projectsLoading()) {
+            <div class="flex items-center gap-2 py-3 text-xs text-slate-400">
+              <span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+              Loading projects…
+            </div>
+          } @else if (allProjects().length === 0) {
+            <p class="text-xs text-slate-400 py-2">No projects found.</p>
+          } @else {
+            @for (cat of projectCategories; track cat) {
+              <div>
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="material-symbols-outlined text-[14px] text-slate-400">{{ cat === 'TASKS' ? 'task_alt' : 'account_balance_wallet' }}</span>
+                  <p class="text-2xs font-semibold text-slate-500 uppercase tracking-wider">{{ cat === 'TASKS' ? 'Tasks Projects' : 'Budget Projects' }}</p>
+                </div>
+                <div class="space-y-0.5 -mx-1">
+                  @for (proj of allProjects(); track proj.project_id) {
+                    @let mapping = getMappingForProject(proj.project_id, cat);
+                    @let active = mapping !== undefined && toBool(mapping.is_active);
+                    <div class="flex items-center justify-between px-2 py-1.5 rounded hover:bg-slate-50 transition-colors">
+                      <div class="min-w-0 flex-1 pr-3">
+                        <p class="text-xs font-medium text-slate-700 truncate">{{ proj.project_name }}</p>
+                        <p class="text-2xs text-slate-400 font-mono">{{ proj.project_id }}</p>
+                      </div>
+                      <div class="flex items-center gap-2 flex-shrink-0">
+                        <span class="text-2xs px-1.5 py-0.5 rounded font-semibold"
+                              [class]="active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'">
+                          {{ active ? 'Access' : 'No access' }}
+                        </span>
+                        <button class="p-1 text-slate-400 rounded transition-colors disabled:opacity-40"
+                                [class]="active ? 'hover:text-amber-500 hover:bg-amber-50' : 'hover:text-green-600 hover:bg-green-50'"
+                                [title]="active ? 'Revoke access' : 'Grant access'"
+                                [disabled]="togglingProject() === proj.project_id + ':' + cat"
+                                (click)="toggleProjectAccess(proj.project_id, cat, mapping)">
+                          <span class="material-symbols-outlined text-[15px]">{{ active ? 'person_off' : 'person_add' }}</span>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          }
+        </div>
+      }
       <div drawerFooter>
         <button type="button" class="px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
                 (click)="closeDrawer()">Cancel</button>
@@ -207,6 +255,11 @@ export class UsersComponent implements OnInit {
   showPassword = signal(false);
   form!: FormGroup;
   search = '';
+
+  allProjects = signal<Project[]>([]);
+  userMappings = signal<UserProjectMapping[]>([]);
+  projectsLoading = signal(false);
+  togglingProject = signal('');
 
   constructor(
     private api: ApiService,
@@ -273,6 +326,58 @@ export class UsersComponent implements OnInit {
     });
     this.errorMsg.set('');
     this.drawerOpen.set(true);
+    this.loadUserProjects(user.user_id);
+  }
+
+  loadUserProjects(userId: string) {
+    this.projectsLoading.set(true);
+    forkJoin([this.api.getAllProjects(), this.api.getUserProjectMappings(userId)]).subscribe({
+      next: ([projects, mappings]) => {
+        this.allProjects.set(projects);
+        this.userMappings.set(mappings);
+        this.projectsLoading.set(false);
+      },
+      error: () => this.projectsLoading.set(false)
+    });
+  }
+
+  readonly projectCategories: Array<'TASKS' | 'BUDGET'> = ['TASKS', 'BUDGET'];
+
+  getMappingForProject(projectId: string, category: string): UserProjectMapping | undefined {
+    return this.userMappings().find(m => m.project_id_fk === projectId && m.project_category === category);
+  }
+
+  toggleProjectAccess(projectId: string, category: string, mapping: UserProjectMapping | undefined) {
+    const user = this.editingUser();
+    if (!user) return;
+    const cat = category as 'TASKS' | 'BUDGET';
+    const key = projectId + ':' + cat;
+    this.togglingProject.set(key);
+
+    if (mapping && this.toBool(mapping.is_active)) {
+      this.api.removeUserFromProject(mapping.mapping_id).subscribe({
+        next: () => {
+          this.userMappings.update(ms => ms.map(m => m.mapping_id === mapping.mapping_id ? { ...m, is_active: false } : m));
+          this.togglingProject.set('');
+        },
+        error: () => this.togglingProject.set('')
+      });
+    } else {
+      this.api.assignUserToProject(user.user_id, projectId, cat).subscribe({
+        next: (result) => {
+          const existing = this.userMappings().find(m => m.project_id_fk === projectId && m.project_category === cat);
+          if (existing) {
+            this.userMappings.update(ms => ms.map(m =>
+              m.project_id_fk === projectId && m.project_category === cat ? { ...m, is_active: true } : m
+            ));
+          } else {
+            this.userMappings.update(ms => [...ms, result]);
+          }
+          this.togglingProject.set('');
+        },
+        error: () => this.togglingProject.set('')
+      });
+    }
   }
 
   closeDrawer() { this.drawerOpen.set(false); this.editingUser.set(null); }
