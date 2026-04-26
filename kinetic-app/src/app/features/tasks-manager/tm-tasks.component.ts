@@ -128,11 +128,27 @@ export interface DayChartBlock {
                    class="text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg px-2 py-2 bg-white dark:bg-[#252526] text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary" title="End date">
           </div>
         } @else {
-          <label class="inline-flex items-center gap-2 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider">
-            <span>Day</span>
-            <input type="date" [ngModel]="selectedDay()" (ngModelChange)="selectedDay.set($event)"
-                   class="text-xs font-medium border border-slate-200 dark:border-[#3c3c3c] rounded-lg px-2 py-1.5 bg-white dark:bg-[#252526] text-slate-800 dark:text-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/20">
-          </label>
+          <div class="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 dark:border-[#3c3c3c] bg-white dark:bg-[#252526] p-0.5 shadow-sm">
+            <button type="button"
+                    class="p-1.5 rounded-md text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-[#2a2d2e] transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    title="Previous day"
+                    aria-label="Previous day"
+                    (click)="shiftSelectedDay(-1)">
+              <span class="material-symbols-outlined text-[20px] leading-none">chevron_left</span>
+            </button>
+            <label class="inline-flex items-center gap-1.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider px-1">
+              <span class="hidden sm:inline">Day</span>
+              <input type="date" [ngModel]="selectedDay()" (ngModelChange)="selectedDay.set($event)"
+                     class="text-xs font-medium border border-slate-200 dark:border-[#3c3c3c] rounded-md px-2 py-1 bg-white dark:bg-[#1e1e1e] text-slate-800 dark:text-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/20">
+            </label>
+            <button type="button"
+                    class="p-1.5 rounded-md text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-[#2a2d2e] transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    title="Next day"
+                    aria-label="Next day"
+                    (click)="shiftSelectedDay(1)">
+              <span class="material-symbols-outlined text-[20px] leading-none">chevron_right</span>
+            </button>
+          </div>
           <button type="button"
                   class="text-2xs font-bold uppercase tracking-wide px-3 py-1.5 rounded-lg border border-slate-200 dark:border-[#3c3c3c] text-slate-700 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-[#2a2d2e] transition-colors"
                   (click)="goToday()">Today</button>
@@ -177,9 +193,23 @@ export interface DayChartBlock {
       @if (viewMode() === 'day') {
         <div class="rounded-xl border border-slate-200 dark:border-[#3c3c3c] bg-white dark:bg-[#252526] shadow-sm overflow-hidden flex flex-col min-h-[min(55vh,640px)] max-h-[min(92vh,1240px)]">
           <div class="px-3 py-2 border-b border-slate-100 dark:border-[#3c3c3c] flex items-center justify-between gap-2 bg-slate-50/80 dark:bg-[#1e1e1e]">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="material-symbols-outlined text-[18px] text-slate-500 dark:text-neutral-500">schedule</span>
-              <span class="text-xs font-semibold text-slate-800 dark:text-neutral-100 truncate">{{ prettyDayLabel() }}</span>
+            <div class="flex items-center gap-1 min-w-0">
+              <button type="button"
+                      class="p-1 rounded-md text-slate-500 dark:text-neutral-400 hover:bg-slate-200/80 dark:hover:bg-[#2a2d2e] hover:text-slate-800 dark:hover:text-neutral-100 transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-primary/25"
+                      title="Previous day"
+                      aria-label="Previous day"
+                      (click)="shiftSelectedDay(-1)">
+                <span class="material-symbols-outlined text-[20px] leading-none">chevron_left</span>
+              </button>
+              <span class="material-symbols-outlined text-[18px] text-slate-500 dark:text-neutral-500 shrink-0">schedule</span>
+              <span class="text-xs font-semibold text-slate-800 dark:text-neutral-100 truncate min-w-0">{{ prettyDayLabel() }}</span>
+              <button type="button"
+                      class="p-1 rounded-md text-slate-500 dark:text-neutral-400 hover:bg-slate-200/80 dark:hover:bg-[#2a2d2e] hover:text-slate-800 dark:hover:text-neutral-100 transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-primary/25"
+                      title="Next day"
+                      aria-label="Next day"
+                      (click)="shiftSelectedDay(1)">
+                <span class="material-symbols-outlined text-[20px] leading-none">chevron_right</span>
+              </button>
             </div>
             <span class="text-2xs text-slate-400 dark:text-neutral-500 tabular-nums">
               {{ dayChartEntries().length }} blocks · {{ chartDoneCount() }} done
@@ -1014,6 +1044,23 @@ export class TmTasksComponent implements OnInit, OnDestroy {
 
   goToday(): void {
     this.selectedDay.set(this.todayYmd());
+  }
+
+  /** Move the day view by ±1 calendar day (local). */
+  shiftSelectedDay(deltaDays: number): void {
+    const raw = (this.selectedDay() || this.todayYmd()).trim();
+    const parts = raw.split('-').map(Number);
+    if (parts.length < 3 || parts.some(n => !Number.isFinite(n))) {
+      this.selectedDay.set(this.todayYmd());
+      return;
+    }
+    const [y, m, d] = parts;
+    const dt = new Date(y!, m! - 1, d!);
+    dt.setDate(dt.getDate() + deltaDays);
+    const ny = dt.getFullYear();
+    const nm = String(dt.getMonth() + 1).padStart(2, '0');
+    const nd = String(dt.getDate()).padStart(2, '0');
+    this.selectedDay.set(`${ny}-${nm}-${nd}`);
   }
 
   setView(mode: 'day' | 'list'): void {

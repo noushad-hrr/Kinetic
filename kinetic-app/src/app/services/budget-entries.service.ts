@@ -18,7 +18,8 @@ export class BudgetEntriesService {
   readonly entries = signal<BudgetManagerBudget[]>([]);
   readonly loading = signal(false);
 
-  readonly totals = computed(() => {
+  /** All rows — used for “projected / all rows” and open count. */
+  readonly totalsAll = computed(() => {
     let credits = 0;
     let debits = 0;
     let openCount = 0;
@@ -29,6 +30,21 @@ export class BudgetEntriesService {
       if (!asBool(r.is_done)) openCount++;
     }
     return { credits, debits, net: credits - debits, openCount };
+  });
+
+  /** Only rows with is_done — primary figures in summary panels. */
+  readonly totalsDone = computed(() => {
+    let credits = 0;
+    let debits = 0;
+    let settledCount = 0;
+    for (const r of this.entries()) {
+      if (!asBool(r.is_done)) continue;
+      settledCount++;
+      const amt = Number(r.amount) || 0;
+      if (normType(r.transaction_type) === 'DEBIT') debits += amt;
+      else credits += amt;
+    }
+    return { credits, debits, net: credits - debits, settledCount };
   });
 
   constructor(private api: ApiService) {}
