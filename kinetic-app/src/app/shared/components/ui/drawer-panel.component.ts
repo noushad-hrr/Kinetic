@@ -13,12 +13,16 @@ import { CommonModule } from '@angular/common';
              (click)="backdropClose.emit()"></div>
         <aside
           class="relative flex h-full w-full flex-col bg-white dark:bg-neutral-950 shadow-2xl border-l border-slate-200/90 dark:border-zinc-800 drawer-panel-slide"
-          [ngClass]="widthClass()">
-          <div class="flex items-start justify-between gap-3 px-4 py-3.5 border-b border-slate-100 dark:border-zinc-800 flex-shrink-0 bg-slate-50/70 dark:bg-zinc-900/90">
+          [ngClass]="panelMaxClass()">
+          <div class="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-zinc-800 flex-shrink-0 bg-slate-50/70 dark:bg-zinc-900/90"
+               [ngClass]="compact() ? 'px-3 py-2' : 'px-4 py-3.5'">
             <div class="min-w-0 pr-2">
-              <h2 id="drawer-panel-title" class="text-sm font-semibold text-slate-900 dark:text-neutral-50 tracking-tight">{{ title() }}</h2>
+              <h2 id="drawer-panel-title" class="font-semibold text-slate-900 dark:text-neutral-50 tracking-tight"
+                  [class.text-sm]="!compact()"
+                  [class.text-xs]="compact()">{{ title() }}</h2>
               @if (subtitle()) {
-                <p class="text-xs text-slate-500 dark:text-neutral-400 mt-1 leading-snug">{{ subtitle() }}</p>
+                <p class="text-slate-500 dark:text-neutral-400 leading-snug"
+                   [ngClass]="compact() ? 'text-[11px] mt-0.5' : 'text-xs mt-1'">{{ subtitle() }}</p>
               }
             </div>
             <button type="button"
@@ -27,11 +31,12 @@ import { CommonModule } from '@angular/common';
               <span class="material-symbols-outlined text-[22px]">close</span>
             </button>
           </div>
-          <div class="flex-1 min-h-0 overflow-y-auto px-4 py-4">
+          <div class="flex-1 min-h-0 overflow-y-auto" [ngClass]="compact() ? 'px-3 py-2' : 'px-4 py-4'">
             <ng-content />
           </div>
           @if (showFooter()) {
-            <div class="px-4 py-3 border-t border-slate-100 dark:border-zinc-800 flex flex-wrap items-center justify-end gap-2 flex-shrink-0 bg-white dark:bg-neutral-950">
+            <div class="border-t border-slate-100 dark:border-zinc-800 flex flex-wrap items-center justify-end gap-2 flex-shrink-0 bg-white dark:bg-neutral-950"
+                 [ngClass]="compact() ? 'px-3 py-2' : 'px-4 py-3'">
               <ng-content select="[drawerFooter]" />
             </div>
           }
@@ -58,6 +63,8 @@ export class DrawerPanelComponent {
   subtitle = input('');
   /** sm ≈ users/roles; md/lg for wider forms (tasks, budget). */
   size = input<'sm' | 'md' | 'lg' | 'xl'>('md');
+  /** Tighter padding and typography for data-heavy forms (e.g. tasks). */
+  compact = input(false);
   showFooter = input(true);
 
   closed = output<void>();
@@ -71,5 +78,14 @@ export class DrawerPanelComponent {
       xl: 'max-w-xl',
     };
     return map[this.size()] ?? 'max-w-md';
+  }
+
+  /** Wider panel when compact + lg so dense task grid fits comfortably */
+  panelMaxClass(): string {
+    const base = this.widthClass();
+    if (this.compact() && this.size() === 'lg') {
+      return 'max-w-2xl';
+    }
+    return base;
   }
 }

@@ -56,6 +56,8 @@ export interface TmTaskRow {
   scheduleDurationMins: number;
   /** Day-chart slice only: when set, PATCH updates this schedule row */
   periodicityId?: string;
+  /** This list row’s schedule: include in timesheet */
+  includeInTimesheet?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -154,8 +156,17 @@ export class TaskWorkspaceService {
       last_modified_on: t.last_modified_on,
       scheduleStartMins: this.timeToMins(startTime || '10:00'),
       scheduleDurationMins: this.calcDuration(startTime, endTime),
-      periodicityId: pid || undefined
+      periodicityId: pid || undefined,
+      includeInTimesheet: this.coerceIncludeInTimesheet(
+        primary?.is_include_in_timesheet ?? t.is_include_in_timesheet
+      )
     };
+  }
+
+  private coerceIncludeInTimesheet(v: unknown): boolean {
+    if (v === false || v === 'false' || v === 'FALSE' || v === 0 || v === '0') return false;
+    if (v === true || v === 'true' || v === 'TRUE' || v === 1 || v === '1') return true;
+    return true;
   }
 
   /** Build schedule list from API (schedules[]) or legacy flat task fields */
@@ -177,7 +188,8 @@ export class TaskWorkspaceService {
         created_on: s.created_on,
         last_modified_by: s.last_modified_by,
         last_modified_on: s.last_modified_on,
-        status_label: s.status_label
+        status_label: s.status_label,
+        is_include_in_timesheet: this.coerceIncludeInTimesheet(s.is_include_in_timesheet)
       }));
     }
     return [
@@ -191,7 +203,8 @@ export class TaskWorkspaceService {
         task_order_id: t.task_order_id,
         estimated_hours: t.estimated_hours,
         spent_hours: t.spent_hours,
-        status_label: t.status_label
+        status_label: t.status_label,
+        is_include_in_timesheet: this.coerceIncludeInTimesheet(t.is_include_in_timesheet)
       }
     ];
   }

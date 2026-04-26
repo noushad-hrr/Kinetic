@@ -98,6 +98,8 @@ export interface TaskSchedule {
   task_order_id?: number;
   estimated_hours?: number;
   spent_hours?: number;
+  /** When true, this schedule row counts toward timesheet export / rollups */
+  is_include_in_timesheet?: boolean;
   created_by?: string;
   created_on?: string;
   last_modified_by?: string;
@@ -144,6 +146,8 @@ export interface Task {
   artifacts?: TaskArtifact[];
   /** Primary key of merged primary schedule row (when present) */
   task_periodicity_id?: string;
+  /** From merged schedule row: include in timesheet */
+  is_include_in_timesheet?: boolean;
   /** All periodicity / schedule rows for this task */
   schedules?: TaskSchedule[];
   last_modified_by?: string;

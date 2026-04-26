@@ -263,6 +263,7 @@ export interface DayChartBlock {
                 <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Type</th>
                 <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Date</th>
                 <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Time</th>
+                <th class="text-center px-2 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell w-10" title="Include in timesheet">TS</th>
                 <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Hours (S/E)</th>
                 <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Remarks</th>
                 <th class="text-right px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider">Actions</th>
@@ -273,7 +274,7 @@ export interface DayChartBlock {
                 <tr class="border-b border-slate-50 dark:border-[#2d2d2d] hover:bg-slate-50/60 dark:hover:bg-[#2a2d2e]/60 transition-colors">
                   <td class="px-3 py-2.5">
                     <div class="flex items-center gap-2">
-                      <p class="font-semibold text-slate-800 dark:text-neutral-100 truncate max-w-[200px]">{{ t.title }}</p>
+                      <p class="font-semibold text-slate-800 dark:text-neutral-100 truncate max-w-[150px]">{{ t.title }}</p>
                       @if (t.artifacts.length) {
                         <span class="material-symbols-outlined text-[14px] text-slate-400" title="Has attachments">attach_file</span>
                       }
@@ -302,8 +303,15 @@ export interface DayChartBlock {
                     }
                   </td>
                   <td class="px-3 py-2.5 text-2xs font-medium text-slate-700 dark:text-neutral-300 hidden lg:table-cell">{{ t.startTime }} - {{ t.endTime }}</td>
+                  <td class="px-2 py-2.5 text-center hidden lg:table-cell" [title]="t.includeInTimesheet ? 'Included in timesheet' : 'Not in timesheet'">
+                    @if (t.includeInTimesheet) {
+                      <span class="material-symbols-outlined text-[16px] text-emerald-600 dark:text-emerald-400">check_circle</span>
+                    } @else {
+                      <span class="material-symbols-outlined text-[16px] text-slate-300 dark:text-neutral-600">do_not_disturb_on</span>
+                    }
+                  </td>
                   <td class="px-3 py-2.5 text-2xs font-semibold text-slate-700 dark:text-neutral-300 hidden lg:table-cell">{{ t.spent_hours || 0 }} / {{ t.estimated_hours || 0 }}h</td>
-                  <td class="px-3 py-2.5 text-2xs text-slate-600 dark:text-neutral-400 hidden lg:table-cell max-w-[200px]">
+                  <td class="px-3 py-2.5 text-2xs text-slate-600 dark:text-neutral-400 hidden lg:table-cell max-w-[140px]">
                     @if (remarksCellText(t)) {
                       <p class="line-clamp-2 break-words" [title]="remarksCellText(t)">{{ remarksCellText(t) }}</p>
                     } @else {
@@ -328,7 +336,7 @@ export interface DayChartBlock {
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="10" class="px-3 py-12 text-center text-slate-400 dark:text-neutral-500 text-xs">No tasks match your filters.</td></tr>
+                <tr><td colspan="11" class="px-3 py-12 text-center text-slate-400 dark:text-neutral-500 text-xs">No tasks match your filters.</td></tr>
               }
             </tbody>
           </table>
@@ -389,362 +397,394 @@ export interface DayChartBlock {
     <app-drawer-panel
       [open]="taskModalOpen()"
       [title]="editingTask() ? 'Edit task' : 'New task'"
-      subtitle="Schedule day and time power the Day chart timeline."
+      subtitle="Schedules drive dates on the list and Day chart."
       size="lg"
+      [compact]="true"
       (closed)="closeTaskModal()"
       (backdropClose)="closeTaskModal()">
       @if (taskForm) {
-        <form [formGroup]="taskForm" class="space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form [formGroup]="taskForm" class="space-y-2.5">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
             @if (editingTask(); as et) {
               @if (et.taskDate) {
-                <div class="md:col-span-2 rounded-xl border-2 border-primary/35 bg-primary/[0.06] dark:bg-primary/10 px-4 py-3 space-y-0.5">
-                  <p class="text-[10px] font-bold text-primary uppercase tracking-wider">This occurrence (list row)</p>
-                  <p class="text-sm font-bold text-slate-900 dark:text-neutral-100">{{ et.taskDate | date:'EEEE, MMM d, y' }}</p>
-                  <p class="text-xs text-slate-600 dark:text-neutral-400 tabular-nums">{{ et.startTime }} – {{ et.endTime }}</p>
+                <div class="md:col-span-2 rounded-lg border border-primary/40 bg-primary/[0.07] dark:bg-primary/10 px-2.5 py-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                  <span class="text-[10px] font-bold text-primary uppercase tracking-wide shrink-0">This row</span>
+                  <span class="text-xs font-semibold text-slate-900 dark:text-neutral-100">{{ et.taskDate | date:'EEE MMM d, y' }}</span>
+                  <span class="text-[11px] text-slate-600 dark:text-neutral-400 tabular-nums">{{ et.startTime }}–{{ et.endTime }}</span>
                 </div>
               }
             }
             <div class="md:col-span-2">
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Task Title</label>
+              <label class="block text-[10px] font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wide mb-0.5">Title</label>
               <input formControlName="task_title" type="text" placeholder="What needs to be done?"
-                     class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                     class="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary">
               @if (taskForm.get('task_title')?.invalid && taskForm.get('task_title')?.touched) {
-                <p class="text-red-500 text-[10px] mt-1">Title is required</p>
+                <p class="text-red-500 text-[10px] mt-0.5">Title is required</p>
               }
             </div>
 
             <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Project</label>
+              <label class="block text-[10px] font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wide mb-0.5">Project</label>
               <select formControlName="project_id_fk"
-                      class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-                <option value="">Select Project</option>
+                      class="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary">
+                <option value="">Select…</option>
                 @for (p of activeProjects(); track p.id) {
                   <option [value]="p.id">{{ p.name }} — {{ p.status }}</option>
                 }
               </select>
               @if (taskForm.get('project_id_fk')?.invalid && (taskForm.get('project_id_fk')?.touched || saveAttempted())) {
-                <p class="text-red-500 text-[10px] mt-1">Project is required</p>
+                <p class="text-red-500 text-[10px] mt-0.5">Required</p>
               }
             </div>
 
-            <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Task Type</label>
-              <select formControlName="type_id"
-                      class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-                @for (t of masters.taskTypes(); track t.type_id) {
-                  <option [value]="t.type_id">{{ t.type_label }}</option>
-                }
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Priority</label>
-              <select formControlName="priority_id"
-                      class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-                @for (pr of masters.priorities(); track pr.priority_id) {
-                  <option [value]="pr.priority_id">{{ pr.priority_label }}</option>
-                }
-              </select>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wide mb-0.5">Type</label>
+                <select formControlName="type_id"
+                        class="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary">
+                  @for (t of masters.taskTypes(); track t.type_id) {
+                    <option [value]="t.type_id">{{ t.type_label }}</option>
+                  }
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wide mb-0.5">Priority</label>
+                <select formControlName="priority_id"
+                        class="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary">
+                  @for (pr of masters.priorities(); track pr.priority_id) {
+                    <option [value]="pr.priority_id">{{ pr.priority_label }}</option>
+                  }
+                </select>
+              </div>
             </div>
 
             <div class="md:col-span-2">
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Description</label>
-              <textarea formControlName="task_description" rows="3" placeholder="Describe what this task involves..."
-                        class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary"></textarea>
+              <label class="block text-[10px] font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wide mb-0.5">Description</label>
+              <textarea formControlName="task_description" rows="2" placeholder="Optional…"
+                        class="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary leading-snug"></textarea>
             </div>
 
-            <div class="md:col-span-2 space-y-3 pt-2 border-t border-slate-100 dark:border-[#3c3c3c]">
-              <div class="flex items-center justify-between">
-                <label class="block text-2xs font-bold text-slate-500 uppercase tracking-wider">Schedules</label>
-                <button type="button" (click)="addSchedule()" class="text-xs text-primary font-bold flex items-center gap-1 hover:underline">
-                  <span class="material-symbols-outlined text-[16px]">add_circle</span> Add schedule
+            <div class="md:col-span-2 space-y-2 pt-1.5 border-t border-slate-100 dark:border-[#3c3c3c]">
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-[10px] font-bold text-slate-500 dark:text-neutral-500 uppercase tracking-wide">Schedules</label>
+                <button type="button" (click)="addSchedule()" class="text-[11px] text-primary font-semibold inline-flex items-center gap-0.5 hover:underline shrink-0">
+                  <span class="material-symbols-outlined text-[14px]">add</span> Add
                 </button>
               </div>
               @if (taskForm.errors?.['schedulesRequired'] && taskForm.touched) {
-                <p class="text-red-500 text-[10px]">Add at least one schedule (date &amp; time window).</p>
+                <p class="text-red-500 text-[10px]">At least one schedule required.</p>
               }
-              <div formArrayName="schedules" class="space-y-3">
+              <div formArrayName="schedules" class="space-y-2">
                 @for (sch of schedulesArray.controls; track sch) {
                   <div [formGroupName]="$index"
-                       class="p-3 bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-[#3c3c3c] rounded-xl relative transition-shadow"
+                       class="p-2 bg-slate-50/90 dark:bg-white/[0.03] border border-slate-200/80 dark:border-[#3c3c3c] rounded-lg relative transition-shadow"
                        [class.ring-2]="sch.get('task_periodicity_id')?.value && sch.get('task_periodicity_id')?.value === highlightPeriodicityId()"
                        [class.ring-primary]="sch.get('task_periodicity_id')?.value && sch.get('task_periodicity_id')?.value === highlightPeriodicityId()"
                        [class.border-primary]="sch.get('task_periodicity_id')?.value && sch.get('task_periodicity_id')?.value === highlightPeriodicityId()">
                     @if (schedulesArray.length > 1) {
-                      <button type="button" (click)="removeSchedule($index)" class="absolute -top-2 -right-2 w-5 h-5 bg-white dark:bg-[#3c3c3c] border border-slate-200 dark:border-[#4c4c4c] rounded-full text-red-500 hover:text-red-600 shadow-sm flex items-center justify-center transition-transform hover:scale-110" title="Remove schedule">
-                        <span class="material-symbols-outlined text-[14px]">close</span>
+                      <button type="button" (click)="removeSchedule($index)" class="absolute top-1.5 right-1.5 w-6 h-6 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center justify-center" title="Remove">
+                        <span class="material-symbols-outlined text-[16px]">close</span>
                       </button>
                     }
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Schedule {{ $index + 1 }}</p>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 pr-7">#{{ $index + 1 }}</p>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                       <div>
-                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Status</label>
+                        <label class="block text-[10px] font-medium text-slate-500 dark:text-neutral-500 mb-0.5">Status</label>
                         <select formControlName="task_status_id"
-                                class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                                class="w-full px-1.5 py-1 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] focus:outline-none focus:ring-1 focus:ring-primary/30">
                           @for (s of masters.statuses(); track s.status_id) {
                             <option [value]="s.status_id">{{ s.status_label }}</option>
                           }
                         </select>
                       </div>
-                      <div class="rounded-lg p-1.5 -m-0.5 transition-shadow"
+                      <div class="rounded-md p-1 -m-px transition-shadow"
                            [ngClass]="{ 'ring-2 ring-primary bg-primary/10 dark:bg-primary/15': scheduleFormHighlighted(sch) }">
-                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Date</label>
+                        <label class="block text-[10px] font-medium text-slate-500 dark:text-neutral-500 mb-0.5">Date</label>
                         <input formControlName="task_date" type="date"
-                               class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                               class="w-full px-1 py-0.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] focus:outline-none focus:ring-1 focus:ring-primary/30">
                         @if (sch.get('task_date')?.invalid && sch.get('task_date')?.touched) {
-                          <p class="text-red-500 text-[10px] mt-1">Date is required</p>
+                          <p class="text-red-500 text-[9px] mt-0.5">Required</p>
                         }
                       </div>
-                      <div class="rounded-lg p-1.5 -m-0.5 transition-shadow"
+                      <div class="rounded-md p-1 -m-px transition-shadow"
                            [ngClass]="{ 'ring-2 ring-primary bg-primary/10 dark:bg-primary/15': scheduleFormHighlighted(sch) }">
-                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Start time</label>
+                        <label class="block text-[10px] font-medium text-slate-500 dark:text-neutral-500 mb-0.5">Start</label>
                         <input formControlName="task_start_time" type="time"
                                [class.border-red-400]="sch.errors?.['timeRangeInvalid'] && sch.touched"
-                               class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                               class="w-full px-1 py-0.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] focus:outline-none focus:ring-1 focus:ring-primary/30">
                       </div>
-                      <div class="rounded-lg p-1.5 -m-0.5 transition-shadow"
+                      <div class="rounded-md p-1 -m-px transition-shadow"
                            [ngClass]="{ 'ring-2 ring-primary bg-primary/10 dark:bg-primary/15': scheduleFormHighlighted(sch) }">
-                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">End time</label>
+                        <label class="block text-[10px] font-medium text-slate-500 dark:text-neutral-500 mb-0.5">End</label>
                         <input formControlName="task_end_time" type="time"
                                [class.border-red-400]="sch.errors?.['timeRangeInvalid'] && sch.touched"
-                               class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                               class="w-full px-1 py-0.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] focus:outline-none focus:ring-1 focus:ring-primary/30">
                         @if (sch.errors?.['timeRangeInvalid'] && sch.touched) {
-                          <p class="text-red-500 text-[10px] mt-1">End after start</p>
+                          <p class="text-red-500 text-[9px] mt-0.5">End after start</p>
                         }
                       </div>
-                      <div class="md:col-span-2">
-                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Remarks</label>
-                        <textarea formControlName="task_remarks" rows="2" placeholder="Notes for this occurrence…"
-                                  class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary"></textarea>
-                        @if (sch.get('task_remarks')?.invalid && sch.get('task_remarks')?.touched) {
-                          <p class="text-red-500 text-[10px] mt-1">Remarks are required</p>
-                        }
-                      </div>
-                      <div>
-                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Estimated hours</label>
+                      <div class="col-span-2 md:col-span-2">
+                        <label class="block text-[10px] font-medium text-slate-500 dark:text-neutral-500 mb-0.5">Est. h</label>
                         <input formControlName="estimated_hours" type="number" step="0.5"
-                               class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                               class="w-full px-1.5 py-1 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] focus:outline-none focus:ring-1 focus:ring-primary/30">
                       </div>
-                      <div>
-                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Spent hours</label>
+                      <div class="col-span-2 md:col-span-2">
+                        <label class="block text-[10px] font-medium text-slate-500 dark:text-neutral-500 mb-0.5">Spent h</label>
                         <input formControlName="spent_hours" type="number" step="0.5"
-                               class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                               class="w-full px-1.5 py-1 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] focus:outline-none focus:ring-1 focus:ring-primary/30">
+                      </div>
+                      <div class="col-span-2 md:col-span-4">
+                        <label class="block text-[10px] font-medium text-slate-500 dark:text-neutral-500 mb-0.5">Remarks</label>
+                        <textarea formControlName="task_remarks" rows="2" placeholder="Per occurrence…"
+                                  class="w-full px-2 py-1 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] focus:outline-none focus:ring-1 focus:ring-primary/30 leading-snug"></textarea>
+                        @if (sch.get('task_remarks')?.invalid && sch.get('task_remarks')?.touched) {
+                          <p class="text-red-500 text-[9px] mt-0.5">Required</p>
+                        }
+                      </div>
+                      <div class="col-span-2 md:col-span-4 flex items-center">
+                        <label class="inline-flex items-center gap-1.5 cursor-pointer select-none text-[11px] text-slate-700 dark:text-neutral-300">
+                          <input type="checkbox" formControlName="is_include_in_timesheet"
+                                 class="w-3.5 h-3.5 rounded border-slate-300 text-primary focus:ring-primary/25 shrink-0">
+                          <span>Include in timesheet</span>
+                        </label>
                       </div>
                     </div>
                   </div>
                 } @empty {
-                  <p class="text-[10px] text-center text-slate-400 py-3 border border-dashed border-slate-200 dark:border-[#3c3c3c] rounded-xl italic">No schedules — use Add schedule.</p>
+                  <p class="text-[10px] text-center text-slate-400 py-2 border border-dashed border-slate-200 dark:border-[#3c3c3c] rounded-md italic">No schedules — Add</p>
                 }
               </div>
             </div>
 
             <div class="md:col-span-2">
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Assignees</label>
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-slate-50 dark:bg-[#1e1e1e] max-h-[150px] overflow-y-auto">
+              <label class="block text-[10px] font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wide mb-0.5">Assignees</label>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-1 p-2 border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-slate-50 dark:bg-[#1e1e1e] max-h-[120px] overflow-y-auto">
                 @for (u of masters.users(); track u.user_id) {
-                  <label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white dark:hover:bg-[#2d2d2d] cursor-pointer transition-colors">
+                  <label class="flex items-center gap-1.5 px-1.5 py-1 rounded hover:bg-white dark:hover:bg-[#2d2d2d] cursor-pointer">
                     <input type="checkbox"
                            [checked]="selectedAssigneeIds().includes(u.user_id)"
                            (change)="toggleAssignee(u.user_id)"
-                           class="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary/20">
-                    <span class="text-xs text-slate-700 dark:text-slate-300 truncate">{{ u.display_name }}</span>
+                           class="w-3.5 h-3.5 rounded border-slate-300 text-primary focus:ring-primary/20 shrink-0">
+                    <span class="text-[11px] text-slate-700 dark:text-slate-300 truncate">{{ u.display_name }}</span>
                   </label>
                 }
               </div>
-              <p class="text-[10px] text-slate-400 mt-1">Select one or more team members</p>
               @if (taskForm.touched && selectedAssigneeIds().length === 0) {
-                <p class="text-[10px] text-red-500 mt-0.5">At least one assignee is required</p>
+                <p class="text-[10px] text-red-500 mt-0.5">Select at least one assignee</p>
               }
             </div>
 
           </div>
 
           <!-- Task Artifacts (Add/Edit) -->
-          <div class="space-y-3 pt-4 border-t border-slate-100 dark:border-[#3c3c3c] mt-4">
-            <div class="flex items-center justify-between">
-              <label class="block text-2xs font-bold text-slate-500 uppercase tracking-wider">References & Artifacts</label>
-              <button type="button" (click)="addArtifact()" class="text-xs text-primary font-bold flex items-center gap-1 hover:underline">
-                <span class="material-symbols-outlined text-[16px]">add_circle</span> Add Reference
+          <div class="space-y-2 pt-2 border-t border-slate-100 dark:border-[#3c3c3c]">
+            <div class="flex items-center justify-between gap-2">
+              <label class="text-[10px] font-bold text-slate-500 dark:text-neutral-500 uppercase tracking-wide">References</label>
+              <button type="button" (click)="addArtifact()" class="text-[11px] text-primary font-semibold inline-flex items-center gap-0.5 hover:underline">
+                <span class="material-symbols-outlined text-[14px]">add</span> Add
               </button>
             </div>
 
-            <div formArrayName="artifacts" class="space-y-3">
+            <div formArrayName="artifacts" class="space-y-2">
               @for (art of artifactsArray.controls; track art) {
-                <div [formGroupName]="$index" class="p-3 bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-[#3c3c3c] rounded-xl relative group">
-                  <button type="button" (click)="removeArtifact($index)" class="absolute -top-2 -right-2 w-5 h-5 bg-white dark:bg-[#3c3c3c] border border-slate-200 dark:border-[#4c4c4c] rounded-full text-red-500 hover:text-red-600 shadow-sm flex items-center justify-center transition-transform hover:scale-110">
-                    <span class="material-symbols-outlined text-[14px]">close</span>
+                <div [formGroupName]="$index" class="p-2 bg-slate-50/90 dark:bg-white/[0.03] border border-slate-200/80 dark:border-[#3c3c3c] rounded-lg relative pr-7">
+                  <button type="button" (click)="removeArtifact($index)" class="absolute top-1.5 right-1.5 w-6 h-6 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[16px]">close</span>
                   </button>
 
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div class="md:col-span-1">
-                      <input formControlName="artifact_title" type="text" placeholder="Title (e.g. Design Doc)"
-                             class="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <input formControlName="artifact_title" type="text" placeholder="Title"
+                             class="w-full px-2 py-1 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] focus:ring-1 focus:ring-primary/30">
                       @if (art.get('artifact_title')?.invalid && art.get('artifact_title')?.touched) {
-                        <p class="text-red-500 text-[10px] mt-0.5">Title required</p>
+                        <p class="text-red-500 text-[9px] mt-0.5">Required</p>
                       }
                     </div>
                     <div>
-                      <select formControlName="artifact_type" class="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526]">
-                        <option value="url">URL / Link</option>
-                        <option value="credential">Credential / Key</option>
-                        <option value="documentation">Documentation</option>
+                      <select formControlName="artifact_type" class="w-full px-2 py-1 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526]">
+                        <option value="url">URL</option>
+                        <option value="credential">Credential</option>
+                        <option value="documentation">Docs</option>
                         <option value="other">Other</option>
                       </select>
                     </div>
                     <div class="md:col-span-2">
-                      <input formControlName="artifact_value" type="text" [placeholder]="art.get('artifact_type')?.value === 'url' ? 'https://...' : 'Reference value'"
-                             class="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] font-mono">
+                      <input formControlName="artifact_value" type="text" [placeholder]="art.get('artifact_type')?.value === 'url' ? 'https://…' : 'Value'"
+                             class="w-full px-2 py-1 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] font-mono">
                       @if (art.get('artifact_value')?.invalid && art.get('artifact_value')?.touched) {
-                        <p class="text-red-500 text-[10px] mt-0.5">Value required</p>
+                        <p class="text-red-500 text-[9px] mt-0.5">Required</p>
                       }
                     </div>
-                    <div class="md:col-span-2 flex items-center gap-3">
-                      <label class="flex items-center gap-2 cursor-pointer group">
-                        <input formControlName="is_sensitive" type="checkbox" class="w-3.5 h-3.5 rounded border-slate-300 text-primary focus:ring-primary/20">
-                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-tight group-hover:text-slate-700 transition-colors">Sensitive Data</span>
+                    <div class="md:col-span-2">
+                      <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                        <input formControlName="is_sensitive" type="checkbox" class="w-3 h-3 rounded border-slate-300 text-primary">
+                        <span class="text-[10px] font-semibold text-slate-500 uppercase">Sensitive</span>
                       </label>
                     </div>
                   </div>
                 </div>
               } @empty {
-                <p class="text-[10px] text-center text-slate-400 py-3 border border-dashed border-slate-200 dark:border-[#3c3c3c] rounded-xl italic">No references added for this task.</p>
+                <p class="text-[10px] text-center text-slate-400 py-2 border border-dashed border-slate-200 dark:border-[#3c3c3c] rounded-md italic">No references</p>
               }
             </div>
           </div>
         </form>
       }
       <div drawerFooter>
-        <button type="button" class="px-3 py-2 text-xs font-medium text-slate-600 dark:text-neutral-300 border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] hover:bg-slate-50 dark:hover:bg-[#2a2d2e]"
+        <button type="button" class="px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-neutral-300 border border-slate-200 dark:border-[#3c3c3c] rounded-md bg-white dark:bg-[#252526] hover:bg-slate-50 dark:hover:bg-[#2a2d2e]"
                 (click)="closeTaskModal()">Cancel</button>
-        <button type="button" class="px-3 py-2 text-xs font-semibold bg-primary dark:bg-[#3e3e42] text-white rounded-lg hover:bg-primary/90 dark:hover:bg-[#4a4a4a]"
-                (click)="saveTask()">{{ editingTask() ? 'Save changes' : 'Create task' }}</button>
+        <button type="button" class="px-2.5 py-1.5 text-xs font-semibold bg-primary dark:bg-[#3e3e42] text-white rounded-md hover:bg-primary/90 dark:hover:bg-[#4a4a4a]"
+                (click)="saveTask()">{{ editingTask() ? 'Save' : 'Create' }}</button>
       </div>
     </app-drawer-panel>
 
     <app-drawer-panel
       [open]="!!viewingTask()"
       [title]="'Task details'"
-      subtitle="Detailed overview of the selected task."
-      size="md"
+      subtitle="Read-only; Edit to change."
+      size="lg"
+      [compact]="true"
       (closed)="viewingTask.set(null)"
       (backdropClose)="viewingTask.set(null)">
       @if (viewingTask(); as t) {
-        <div class="space-y-6">
-          <div>
-            <h3 class="text-lg font-bold text-slate-900 dark:text-neutral-100 mb-1">{{ t.title }}</h3>
-            <p class="text-xs text-slate-400 font-mono">{{ t.taskId }}</p>
+        <div class="space-y-2.5">
+          <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-slate-100 dark:border-zinc-800 pb-2">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-neutral-100 leading-snug min-w-0 flex-1">{{ t.title }}</h3>
+            <p class="text-[10px] text-slate-400 font-mono shrink-0">{{ t.taskId }}</p>
           </div>
 
           @if (t.taskDate) {
-            <div class="rounded-xl border-2 border-primary/35 bg-primary/[0.06] dark:bg-primary/10 px-4 py-3 space-y-1">
-              <p class="text-[10px] font-bold text-primary uppercase tracking-wider">This occurrence</p>
-              <p class="text-base font-bold text-slate-900 dark:text-neutral-100">{{ t.taskDate | date:'EEEE, MMM d, y' }}</p>
-              <p class="text-sm text-slate-600 dark:text-neutral-300 tabular-nums">{{ t.startTime }} – {{ t.endTime }}</p>
-              @if (t.task_remarks?.trim()) {
-                <p class="text-xs text-slate-600 dark:text-neutral-400 pt-1 border-t border-primary/20 mt-2 whitespace-pre-wrap">{{ t.task_remarks }}</p>
+            <div class="rounded-lg border border-primary/40 bg-primary/[0.06] dark:bg-primary/10 px-2.5 py-2 space-y-1">
+              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <span class="text-[10px] font-bold text-primary uppercase tracking-wide">This row</span>
+                <span class="text-xs font-bold text-slate-900 dark:text-neutral-100">{{ t.taskDate | date:'EEE MMM d, y' }}</span>
+                <span class="text-[11px] text-slate-600 dark:text-neutral-300 tabular-nums">{{ t.startTime }}–{{ t.endTime }}</span>
+                <span class="px-1.5 py-0 rounded text-[10px] font-semibold" [class]="statusClass(t.status)">{{ t.status }}</span>
+              </div>
+              @if (remarksCellText(t)) {
+                <p class="text-[11px] text-slate-600 dark:text-neutral-400 border-t border-primary/15 pt-1.5 mt-1 whitespace-pre-wrap leading-snug">{{ t.task_remarks }}</p>
               }
             </div>
           }
 
-          <div class="grid grid-cols-2 gap-6">
-            <div class="space-y-1">
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Project</label>
-              <p class="text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ ws.projectName(t.projectId) }}</p>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-2 text-xs">
+            <div>
+              <p class="text-[9px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-wide">Project</p>
+              <p class="font-semibold text-slate-800 dark:text-neutral-200 truncate" [title]="ws.projectName(t.projectId)">{{ ws.projectName(t.projectId) }}</p>
             </div>
-            <div class="space-y-1">
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Type</label>
-              <p class="text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t.typeLabel }}</p>
+            <div>
+              <p class="text-[9px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-wide">Type</p>
+              <p class="font-semibold text-slate-800 dark:text-neutral-200">{{ t.typeLabel }}</p>
             </div>
-            <div class="space-y-1">
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</label>
-              <div><span class="px-2 py-0.5 rounded-md text-2xs font-semibold" [class]="statusClass(t.status)">{{ t.status }}</span></div>
-            </div>
-            <div class="space-y-1">
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Priority</label>
-              <div><span class="px-2 py-0.5 rounded-md text-2xs font-semibold" [class]="priorityClass(t.priority)">{{ t.priority }}</span></div>
+            <div>
+              <p class="text-[9px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-wide">Priority</p>
+              <span class="inline-block px-1.5 py-0 rounded text-[10px] font-semibold mt-0.5" [class]="priorityClass(t.priority)">{{ t.priority }}</span>
             </div>
             @if (t.scheduleCount > 1 && (t.startDate || t.endDate)) {
-              <div class="space-y-1 md:col-span-2">
-                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date range (all schedules)</label>
-                <p class="text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t.startDate | date:'MMM d, y' }} – {{ t.endDate | date:'MMM d, y' }}</p>
+              <div class="col-span-2 sm:col-span-4">
+                <p class="text-[9px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-wide">All schedules (range)</p>
+                <p class="font-medium text-slate-700 dark:text-neutral-300">{{ t.startDate | date:'MMM d, y' }} → {{ t.endDate | date:'MMM d, y' }}</p>
               </div>
             }
           </div>
 
-          <div class="space-y-3">
-            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Schedules</label>
-            @for (sch of t.schedules; track sch.task_periodicity_id || $index) {
-              <div class="p-4 bg-slate-50 dark:bg-white/[0.03] rounded-xl border border-slate-100 dark:border-[#3c3c3c] grid grid-cols-2 gap-4 transition-shadow"
-                   [class.ring-2]="isHighlightedSchedule(t, sch)"
-                   [class.ring-primary]="isHighlightedSchedule(t, sch)"
-                   [class.border-primary]="isHighlightedSchedule(t, sch)">
-                <div class="space-y-1 md:col-span-2">
-                  <p class="text-2xs font-mono text-slate-400">{{ sch.task_periodicity_id || '—' }}</p>
-                  <span class="px-2 py-0.5 rounded-md text-2xs font-semibold inline-block" [class]="statusClass(sch.status_label || t.status)">{{ sch.status_label || t.status }}</span>
-                </div>
-                <div class="space-y-1 rounded-lg p-1.5 -m-0.5 transition-shadow"
-                     [ngClass]="{ 'ring-2 ring-primary bg-primary/10 dark:bg-primary/15': isHighlightedSchedule(t, sch) }">
-                  <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date</label>
-                  <p class="text-sm font-medium text-slate-700 dark:text-neutral-200">{{ sch.task_date | date:'MMM d, y' }}</p>
-                </div>
-                <div class="space-y-1 rounded-lg p-1.5 -m-0.5 transition-shadow"
-                     [ngClass]="{ 'ring-2 ring-primary bg-primary/10 dark:bg-primary/15': isHighlightedSchedule(t, sch) }">
-                  <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Time</label>
-                  <p class="text-sm font-medium text-slate-700 dark:text-neutral-200">{{ sch.task_start_time }} – {{ sch.task_end_time }}</p>
-                </div>
-                <div class="space-y-1">
-                  <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Est. / Spent</label>
-                  <p class="text-sm font-medium text-slate-700 dark:text-neutral-200">{{ sch.estimated_hours ?? 0 }}h / {{ sch.spent_hours ?? 0 }}h</p>
-                </div>
-                @if (sch.task_remarks) {
-                  <div class="space-y-1 md:col-span-2">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Remarks</label>
-                    <p class="text-sm text-slate-600 dark:text-neutral-300 whitespace-pre-wrap">{{ sch.task_remarks }}</p>
+          <div>
+            <p class="text-[9px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-wide mb-1">Schedules</p>
+            <div class="rounded-lg border border-slate-200 dark:border-[#3c3c3c] overflow-hidden divide-y divide-slate-100 dark:divide-zinc-800 bg-slate-50/50 dark:bg-white/[0.02]">
+              @for (sch of t.schedules; track sch.task_periodicity_id || $index) {
+                <div class="grid grid-cols-12 gap-x-1.5 gap-y-1 px-2 py-1.5 text-[11px] sm:text-xs items-start"
+                     [ngClass]="{ 'bg-primary/[0.07] dark:bg-primary/10': isHighlightedSchedule(t, sch) }">
+                  <div class="col-span-12 sm:col-span-3 min-w-0">
+                    <p class="font-mono text-[9px] text-slate-400 truncate">{{ sch.task_periodicity_id || '—' }}</p>
+                    <span class="inline-block mt-0.5 px-1 py-0 rounded text-[10px] font-semibold" [class]="statusClass(sch.status_label || t.status)">{{ sch.status_label || t.status }}</span>
                   </div>
-                }
-              </div>
-            } @empty {
-              <p class="text-xs text-slate-500">No schedule rows.</p>
-            }
+                  <div class="col-span-4 sm:col-span-2">
+                    <p class="text-[9px] font-bold text-slate-400 uppercase">Date</p>
+                    <p class="font-medium text-slate-800 dark:text-neutral-200"
+                       [ngClass]="{ 'ring-1 ring-primary rounded px-0.5 -mx-0.5': isHighlightedSchedule(t, sch) }">{{ sch.task_date | date:'MMM d' }}</p>
+                  </div>
+                  <div class="col-span-4 sm:col-span-2 tabular-nums">
+                    <p class="text-[9px] font-bold text-slate-400 uppercase">Time</p>
+                    <p class="font-medium text-slate-800 dark:text-neutral-200"
+                       [ngClass]="{ 'ring-1 ring-primary rounded px-0.5 -mx-0.5': isHighlightedSchedule(t, sch) }">{{ sch.task_start_time }}–{{ sch.task_end_time }}</p>
+                  </div>
+                  <div class="col-span-4 sm:col-span-1">
+                    <p class="text-[9px] font-bold text-slate-400 uppercase">H</p>
+                    <p class="font-medium text-slate-700 dark:text-neutral-300">{{ sch.spent_hours ?? 0 }}/{{ sch.estimated_hours ?? 0 }}</p>
+                  </div>
+                  <div class="col-span-4 sm:col-span-1 text-center sm:text-left">
+                    <p class="text-[9px] font-bold text-slate-400 uppercase">TS</p>
+                    @if (sch.is_include_in_timesheet !== false) {
+                      <span class="material-symbols-outlined text-[14px] text-emerald-600 dark:text-emerald-400 align-middle" title="In timesheet">check_circle</span>
+                    } @else {
+                      <span class="material-symbols-outlined text-[14px] text-slate-300 dark:text-neutral-600 align-middle" title="Not in timesheet">do_not_disturb_on</span>
+                    }
+                  </div>
+                  <div class="col-span-12 sm:col-span-3 min-w-0">
+                    @if (sch.task_remarks) {
+                      <p class="text-[9px] font-bold text-slate-400 uppercase">Remarks</p>
+                      <p class="text-slate-600 dark:text-neutral-400 line-clamp-3 leading-snug break-words">{{ sch.task_remarks }}</p>
+                    }
+                  </div>
+                </div>
+              } @empty {
+                <p class="text-[11px] text-slate-500 px-2 py-2">No schedules.</p>
+              }
+            </div>
           </div>
 
           @if (t.description) {
-            <div class="space-y-1">
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</label>
-              <div class="p-4 bg-slate-50/60 dark:bg-white/[0.02] border border-slate-100 dark:border-[#3c3c3c] rounded-xl overflow-hidden">
-                <p class="text-sm text-slate-600 dark:text-neutral-300 whitespace-pre-wrap leading-relaxed break-all">{{ t.description }}</p>
+            <div>
+              <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Description</p>
+              <div class="max-h-36 overflow-y-auto rounded-md border border-slate-200 dark:border-[#3c3c3c] bg-white dark:bg-[#1a1a1a] px-2 py-1.5">
+                <p class="text-[11px] text-slate-600 dark:text-neutral-300 whitespace-pre-wrap leading-snug break-words">{{ t.description }}</p>
               </div>
             </div>
           }
 
-          <!-- Task Artifacts (View) -->
+          <div>
+            <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Assignees</p>
+            @if (t.assigneeIds.length) {
+              <div class="flex flex-wrap gap-1">
+                @for (uid of t.assigneeIds; track uid) {
+                  <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-slate-200 dark:border-[#3c3c3c] bg-white dark:bg-[#252526] text-[11px]">
+                    <span class="w-4 h-4 rounded-full bg-primary/15 text-[9px] font-bold text-primary flex items-center justify-center shrink-0">{{ assigneeInitials(uid) }}</span>
+                    <span class="text-slate-700 dark:text-neutral-300 truncate max-w-[140px]">{{ assigneeName(uid) }}</span>
+                  </span>
+                }
+              </div>
+            } @else if ((t.assignee || '').trim()) {
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-slate-200 dark:border-[#3c3c3c] bg-white dark:bg-[#252526] text-[11px]">
+                <span class="w-4 h-4 rounded-full bg-primary/15 text-[9px] font-bold text-primary flex items-center justify-center">{{ initials(t.assignee) }}</span>
+                <span class="text-slate-700 dark:text-neutral-300">{{ t.assignee }}</span>
+              </span>
+            } @else {
+              <span class="text-[11px] text-slate-500">—</span>
+            }
+          </div>
+
           @if (t.artifacts && t.artifacts.length) {
-            <div class="space-y-3 pt-2 border-t border-slate-100 dark:border-[#3c3c3c]">
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">References & Artifacts</label>
-              <div class="space-y-3">
+            <div class="pt-1.5 border-t border-slate-100 dark:border-zinc-800">
+              <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1">References</p>
+              <div class="space-y-1.5">
                 @for (a of t.artifacts; track $index) {
-                  <div class="group relative bg-white dark:bg-[#2d2d2d] border border-slate-100 dark:border-[#3c3c3c] rounded-xl p-4 hover:border-primary/30 transition-all shadow-sm">
-                    <div class="flex items-start justify-between mb-2">
-                      <div class="flex items-center gap-2">
-                        <span class="material-symbols-outlined text-[18px] text-primary/60">
+                  <div class="rounded-md border border-slate-200 dark:border-[#3c3c3c] bg-white dark:bg-[#252526] px-2 py-1.5 hover:border-primary/40 transition-colors">
+                    <div class="flex items-start justify-between gap-2 mb-0.5">
+                      <div class="flex items-center gap-1 min-w-0">
+                        <span class="material-symbols-outlined text-[14px] text-primary/60 shrink-0">
                           {{ a.artifact_type === 'url' ? 'link' : a.artifact_type === 'credential' ? 'key' : 'description' }}
                         </span>
-                        <h4 class="text-sm font-bold text-slate-800 dark:text-neutral-200">{{ a.artifact_title }}</h4>
+                        <span class="text-xs font-bold text-slate-800 dark:text-neutral-200 truncate">{{ a.artifact_title }}</span>
                       </div>
                       @if (a.is_sensitive === true || a.is_sensitive === 'true') {
-                        <span class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase">
-                          <span class="material-symbols-outlined text-[12px]">lock</span>
-                          Sensitive
-                        </span>
+                        <span class="material-symbols-outlined text-[12px] text-amber-600 dark:text-amber-400 shrink-0" title="Sensitive">lock</span>
                       }
                     </div>
-                    
-                    <div class="bg-slate-50 dark:bg-black/20 rounded-lg p-2.5 font-mono text-xs break-all border border-slate-100 dark:border-[#3c3c3c]">
+                    <div class="rounded bg-slate-50 dark:bg-black/25 px-1.5 py-1 font-mono text-[10px] break-all border border-slate-100 dark:border-[#3c3c3c]">
                       @if (a.is_sensitive === true || a.is_sensitive === 'true') {
-                        <div class="flex items-center justify-between">
-                          <span class="text-slate-400 italic">Content hidden for security</span>
-                          <button (click)="copyToClipboard(a.artifact_value)" class="text-primary hover:underline font-bold">Copy</button>
+                        <div class="flex items-center justify-between gap-1">
+                          <span class="text-slate-400 italic text-[10px]">Hidden</span>
+                          <button type="button" (click)="copyToClipboard(a.artifact_value)" class="text-primary text-[10px] font-semibold hover:underline">Copy</button>
                         </div>
                       } @else {
                         <a *ngIf="a.artifact_type === 'url'" [href]="a.artifact_value" target="_blank" class="text-primary hover:underline">{{ a.artifact_value }}</a>
@@ -757,32 +797,26 @@ export interface DayChartBlock {
             </div>
           }
 
-          <div class="pt-4 border-t border-slate-100 dark:border-[#3c3c3c]">
-            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Audit Info</label>
-            <div class="grid grid-cols-2 gap-3">
-              <div class="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-2.5 border border-slate-100 dark:border-[#3c3c3c]">
-                <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Created By</p>
-                <p class="text-xs text-slate-700 dark:text-neutral-300 font-medium">{{ t.created_by || '—' }}</p>
+          <div class="pt-1.5 border-t border-slate-100 dark:border-zinc-800">
+            <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1">Audit</p>
+            <div class="grid grid-cols-2 gap-1.5">
+              <div class="rounded-md border border-slate-200 dark:border-[#3c3c3c] bg-slate-50/80 dark:bg-white/[0.03] px-2 py-1">
+                <p class="text-[9px] font-bold text-slate-400 uppercase">Created</p>
+                <p class="text-[10px] text-slate-700 dark:text-neutral-300 font-medium leading-tight">{{ t.created_by || '—' }}</p>
+                <p class="text-[10px] text-slate-500 dark:text-neutral-500">{{ t.created_on ? (t.created_on | date:'MMM d, yy HH:mm') : '—' }}</p>
               </div>
-              <div class="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-2.5 border border-slate-100 dark:border-[#3c3c3c]">
-                <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Created On</p>
-                <p class="text-xs text-slate-700 dark:text-neutral-300 font-medium">{{ t.created_on ? (t.created_on | date:'MMM d, y, h:mm a') : '—' }}</p>
-              </div>
-              <div class="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-2.5 border border-slate-100 dark:border-[#3c3c3c]">
-                <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Last Modified By</p>
-                <p class="text-xs text-slate-700 dark:text-neutral-300 font-medium">{{ t.last_modified_by || '—' }}</p>
-              </div>
-              <div class="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-2.5 border border-slate-100 dark:border-[#3c3c3c]">
-                <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Last Modified On</p>
-                <p class="text-xs text-slate-700 dark:text-neutral-300 font-medium">{{ t.last_modified_on ? (t.last_modified_on | date:'MMM d, y, h:mm a') : '—' }}</p>
+              <div class="rounded-md border border-slate-200 dark:border-[#3c3c3c] bg-slate-50/80 dark:bg-white/[0.03] px-2 py-1">
+                <p class="text-[9px] font-bold text-slate-400 uppercase">Modified</p>
+                <p class="text-[10px] text-slate-700 dark:text-neutral-300 font-medium leading-tight">{{ t.last_modified_by || '—' }}</p>
+                <p class="text-[10px] text-slate-500 dark:text-neutral-500">{{ t.last_modified_on ? (t.last_modified_on | date:'MMM d, yy HH:mm') : '—' }}</p>
               </div>
             </div>
           </div>
         </div>
       }
       <div drawerFooter>
-        <button type="button" class="w-full px-3 py-2 text-xs font-bold bg-slate-100 dark:bg-[#3c3c3c] text-slate-600 dark:text-neutral-300 rounded-lg hover:bg-slate-200 dark:hover:bg-[#4a4a4a] transition-colors"
-                (click)="viewingTask.set(null)">Close View</button>
+        <button type="button" class="w-full px-2.5 py-1.5 text-xs font-semibold bg-slate-100 dark:bg-[#3c3c3c] text-slate-700 dark:text-neutral-200 rounded-md hover:bg-slate-200 dark:hover:bg-[#4a4a4a] transition-colors"
+                (click)="viewingTask.set(null)">Close</button>
       </div>
     </app-drawer-panel>
 
@@ -1146,7 +1180,15 @@ export class TmTasksComponent implements OnInit, OnDestroy {
       task_remarks: [s?.task_remarks || '', [Validators.required, Validators.pattern(/\S+/)]],
       estimated_hours: [s?.estimated_hours ?? 0, [Validators.required, Validators.min(0)]],
       spent_hours: [s?.spent_hours ?? 0, [Validators.required, Validators.min(0)]],
+      is_include_in_timesheet: [this.scheduleIncludeTsDefault(s)],
     }, { validators: dateTimeRangeValidator });
+  }
+
+  private scheduleIncludeTsDefault(s?: Partial<TaskSchedule>): boolean {
+    const v = s?.is_include_in_timesheet as unknown;
+    if (v === false || v === 'false' || v === 'FALSE' || v === 0 || v === '0') return false;
+    if (v === true || v === 'true' || v === 'TRUE' || v === 1 || v === '1') return true;
+    return true;
   }
 
   addSchedule() {
@@ -1265,6 +1307,20 @@ export class TmTasksComponent implements OnInit, OnDestroy {
     }
   }
 
+  initials(name: string): string {
+    if (!name) return '??';
+    return name.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  }
+
+  assigneeName(userId: string): string {
+    const u = this.masters.users().find(x => x.user_id === userId);
+    return u?.display_name || u?.username || userId;
+  }
+
+  assigneeInitials(userId: string): string {
+    return this.initials(this.assigneeName(userId));
+  }
+
   statusClass(s: string): string {
     const map: Record<string, string> = {
       'In Progress': 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
@@ -1329,6 +1385,7 @@ export class TmTasksComponent implements OnInit, OnDestroy {
           task_remarks: row.task_remarks,
           estimated_hours: row.estimated_hours,
           spent_hours: row.spent_hours,
+          is_include_in_timesheet: row.includeInTimesheet,
         }));
       }
 
@@ -1392,6 +1449,7 @@ export class TmTasksComponent implements OnInit, OnDestroy {
         task_remarks: String(s['task_remarks'] || '').trim(),
         estimated_hours: Number(s['estimated_hours']) || 0,
         spent_hours: Number(s['spent_hours']) || 0,
+        is_include_in_timesheet: !!s['is_include_in_timesheet'],
       };
       const pid = s['task_periodicity_id'];
       if (pid) o['task_periodicity_id'] = pid;
