@@ -3,11 +3,10 @@
 ################################################################################
 
 /kinetic-app/node_modules
-.vs/VSWorkspaceState.json
-.vs/github_dev_branch/v17/.wsuo
-.vs/github_dev_branch/v17/DocumentLayout.json
-kinetic-app/.angular/cache/19.2.22/kinetic-app/.tsbuildinfo
-kinetic-app/.angular/cache/19.2.22/kinetic-app/angular-compiler.db
-kinetic-app/.angular/cache/19.2.22/kinetic-app/angular-compiler.db-lock
-kinetic-app/.angular/cache/19.2.22/kinetic-app/vite/deps/_metadata.json
-kinetic-app/.angular/cache/19.2.22/kinetic-app/vite/deps_ssr/_metadata.json
+
+# Build & cache (do not commit)
+kinetic-app/dist/
+kinetic-app/.angular/
+
+# Visual Studio / Cursor local
+.vs/
