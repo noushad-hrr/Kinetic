@@ -18,7 +18,7 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
           <div>
             <h1 class="text-sm font-semibold text-slate-900 tracking-tight">Budget projects</h1>
             <p class="text-xs text-slate-500 mt-0.5 max-w-xl">
-              Each project has an approved budget. Open <span class="font-medium text-slate-700">Budget</span> to manage categories and spend for the selected project.
+              Each project has an approved budget here. The <span class="font-medium text-slate-700">Budget</span> screen is the transaction ledger (<span class="font-mono text-2xs">budget_manager_budget</span>).
             </p>
           </div>
         </div>
@@ -85,7 +85,7 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
                 </td>
                 <td class="px-3 py-2.5 text-right">
                   <div class="flex items-center justify-end gap-0.5 flex-wrap">
-                    <a [routerLink]="['/budget-manager/budget']" [queryParams]="{ project: p.id }"
+                    <a routerLink="/budget-manager/budget"
                        class="inline-flex items-center gap-0.5 px-2 py-1 rounded-md text-2xs font-semibold text-primary bg-primary/10 hover:bg-primary/15 transition-colors">
                       <span class="material-symbols-outlined text-[14px]">account_balance_wallet</span>
                       Budget
@@ -125,7 +125,7 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
     <app-drawer-panel
       [open]="projectModalOpen()"
       [title]="editingProject() ? 'Edit project' : 'New project'"
-      subtitle="Set the approved budget and status. Line items are managed on the Budget screen."
+      subtitle="Set the approved budget and status. The Budget screen holds the cashbook-style ledger."
       size="md"
       (closed)="closeProjectModal()"
       (backdropClose)="closeProjectModal()">
@@ -269,7 +269,7 @@ export class BmProjectsComponent {
       this.ws.updateProject(cur.id, { name: v.name!, budget: Number(v.budget), status: v.status! });
     } else {
       const p = this.ws.addProject({ name: v.name!, budget: Number(v.budget), status: v.status! });
-      this.router.navigate(['/budget-manager/budget'], { queryParams: { project: p.id } });
+      this.router.navigate(['/budget-manager/budget']);
     }
     this.closeProjectModal();
   }

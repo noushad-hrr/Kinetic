@@ -149,6 +149,12 @@ function route(action, params, body) {
     case 'updateTask':               return handleUpdateTask(body);
     case 'deleteTask':               return handleDeleteTask(params.task_id);
 
+    // Budget Manager — sheet tab: budget_manager_budget
+    case 'getBudgetEntries':         return handleGetBudgetEntries();
+    case 'createBudgetEntry':        return handleCreateBudgetEntry(body);
+    case 'updateBudgetEntry':        return handleUpdateBudgetEntry(body);
+    case 'deleteBudgetEntry':        return handleDeleteBudgetEntry(params.budget_id);
+
     // Utility
     case 'autoCloseOverdue':         return handleAutoCloseOverdue();
 
@@ -1622,6 +1628,115 @@ function handleDeleteTask(taskId) {
   }
 
   return success({ message: 'Task deleted' });
+}
+
+// ─── BUDGET MANAGER (budget_manager_budget) ───────────────────────────────────
+
+var BUDGET_MANAGER_SHEET = 'budget_manager_budget';
+
+function nextBudgetManagerBudgetId() {
+  var rows = sheetToObjects(BUDGET_MANAGER_SHEET);
+  if (!rows.length) return 1;
+  return rows.reduce(function(m, r) {
+    var n = parseInt(r.budget_id, 10);
+    return isNaN(n) ? m : Math.max(m, n);
+  }, 0) + 1;
+}
+
+function coerceBudgetBoolean(v, defaultWhenEmpty) {
+  var d = defaultWhenEmpty !== undefined ? defaultWhenEmpty : false;
+  if (v === true || v === 'TRUE' || v === 'true' || v === 1 || v === '1') return true;
+  if (v === false || v === 'FALSE' || v === 'false' || v === 0 || v === '0') return false;
+  if (v === '' || v === null || v === undefined) return d;
+  return !!v;
+}
+
+function normalizeBudgetType(v) {
+  var s = String(v || '').trim().toUpperCase();
+  return s === 'DEBIT' ? 'DEBIT' : 'CREDIT';
+}
+
+function handleGetBudgetEntries() {
+  try {
+    var rows = sheetToObjects(BUDGET_MANAGER_SHEET);
+    rows.sort(function(a, b) {
+      return parseInt(a.budget_id, 10) - parseInt(b.budget_id, 10);
+    });
+    return success(rows);
+  } catch (err) {
+    return error(err.message || String(err), 500);
+  }
+}
+
+function handleCreateBudgetEntry(body) {
+  try {
+    if (!body || !String(body.title || '').trim()) {
+      return error('title is required', 400);
+    }
+    var id = nextBudgetManagerBudgetId();
+    var ts = now();
+    var row = {
+      budget_id: id,
+      title: String(body.title).trim(),
+      description: body.description != null ? String(body.description) : '',
+      amount: body.amount !== undefined && body.amount !== null && body.amount !== '' ? Number(body.amount) : 0,
+      is_done: coerceBudgetBoolean(body.is_done, false),
+      transaction_type: normalizeBudgetType(body.transaction_type),
+      transaction_date: (body.transaction_date && String(body.transaction_date).trim()) ? String(body.transaction_date).trim() : ts,
+      created_on: ts,
+      updated_on: ts
+    };
+    appendRow(BUDGET_MANAGER_SHEET, row);
+    return success(row);
+  } catch (err) {
+    return error(err.message || String(err), 500);
+  }
+}
+
+function handleUpdateBudgetEntry(body) {
+  try {
+    if (!body || body.budget_id === undefined || body.budget_id === null || body.budget_id === '') {
+      return error('budget_id is required', 400);
+    }
+    var ts = now();
+    var patch = { updated_on: ts };
+    if (body.title !== undefined) patch.title = String(body.title).trim();
+    if (body.description !== undefined) patch.description = body.description != null ? String(body.description) : '';
+    if (body.amount !== undefined && body.amount !== null && body.amount !== '') {
+      patch.amount = Number(body.amount);
+    }
+    if (body.is_done !== undefined) patch.is_done = coerceBudgetBoolean(body.is_done, false);
+    if (body.transaction_type !== undefined) patch.transaction_type = normalizeBudgetType(body.transaction_type);
+    if (body.transaction_date !== undefined) {
+      patch.transaction_date = (body.transaction_date && String(body.transaction_date).trim())
+        ? String(body.transaction_date).trim()
+        : ts;
+    }
+    if (!patch.title && body.title !== undefined && !String(body.title || '').trim()) {
+      return error('title cannot be empty', 400);
+    }
+    var ok = updateRowById(BUDGET_MANAGER_SHEET, 'budget_id', body.budget_id, patch);
+    if (!ok) return error('Budget row not found', 404);
+    var rows = sheetToObjects(BUDGET_MANAGER_SHEET).filter(function(r) {
+      return String(r.budget_id) === String(body.budget_id);
+    });
+    return success(rows.length ? rows[0] : patch);
+  } catch (err) {
+    return error(err.message || String(err), 500);
+  }
+}
+
+function handleDeleteBudgetEntry(budgetId) {
+  try {
+    if (budgetId === undefined || budgetId === null || budgetId === '') {
+      return error('budget_id is required', 400);
+    }
+    var deleted = deleteRowById(BUDGET_MANAGER_SHEET, 'budget_id', budgetId);
+    if (!deleted) return error('Budget row not found', 404);
+    return success({ message: 'deleted' });
+  } catch (err) {
+    return error(err.message || String(err), 500);
+  }
 }
 
 // ─── AUTO-CLOSE OVERDUE ───────────────────────────────────────────────────────

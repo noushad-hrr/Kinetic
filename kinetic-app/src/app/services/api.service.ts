@@ -5,7 +5,7 @@ import { map, catchError } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import {
   ApiResponse, SessionUser, Masters,
-  Role, Permission, AdminUser, Project, UserProjectMapping
+  Role, Permission, AdminUser, Project, UserProjectMapping, BudgetManagerBudget
 } from '../models';
 
 @Injectable({ providedIn: 'root' })
@@ -138,6 +138,24 @@ export class ApiService {
 
   getMasters() {
     return this.call<Masters>('getMasters');
+  }
+
+  // ─── Budget Manager (budget_manager_budget) ───────────────────────────────────
+
+  getBudgetEntries() {
+    return this.call<BudgetManagerBudget[]>('getBudgetEntries');
+  }
+
+  createBudgetEntry(data: Partial<BudgetManagerBudget>) {
+    return this.call<BudgetManagerBudget>('createBudgetEntry', {}, data);
+  }
+
+  updateBudgetEntry(data: Partial<BudgetManagerBudget> & { budget_id: string | number }) {
+    return this.call<BudgetManagerBudget>('updateBudgetEntry', {}, data);
+  }
+
+  deleteBudgetEntry(budgetId: string | number) {
+    return this.call<{ message: string }>('deleteBudgetEntry', { budget_id: String(budgetId) });
   }
 
   // ─── Generic Helpers ─────────────────────────────────────────────────────────

@@ -165,6 +165,19 @@ export interface Task {
   priority?: string;
 }
 
+/** Row in sheet `budget_manager_budget` (Budget Manager → Budget). */
+export interface BudgetManagerBudget {
+  budget_id: string | number;
+  title: string;
+  description?: string | null;
+  amount: number;
+  is_done: boolean | string | number;
+  transaction_type: 'CREDIT' | 'DEBIT' | string;
+  transaction_date: string;
+  created_on?: string | null;
+  updated_on?: string | null;
+}
+
 // ─── API Response ─────────────────────────────────────────────────────────────
 export interface ApiResponse<T> {
   success: boolean;
