@@ -36,10 +36,14 @@ jobs:
       - name: Build Angular app
         run: npx ng build --configuration production --base-href /Kinetic/
 
+      # application builder outputs index.html under browser/ — Pages needs that folder as site root
+      - name: SPA fallback for GitHub Pages
+        run: cp kinetic-app/dist/kinetic-app/browser/index.html kinetic-app/dist/kinetic-app/browser/404.html
+
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: kinetic-app/dist/kinetic-app
+          path: kinetic-app/dist/kinetic-app/browser
 
   deploy:
     runs-on: ubuntu-latest
