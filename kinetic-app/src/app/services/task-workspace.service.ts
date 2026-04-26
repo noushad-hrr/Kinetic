@@ -1,4 +1,8 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, computed } from '@angular/core';
+import { ApiService } from './api.service';
+import { AuthService } from './auth.service';
+import { Task, Project, ApiResponse } from '../models';
+import { firstValueFrom } from 'rxjs';
 
 export interface TmProjectRow {
   id: string;
@@ -15,61 +19,125 @@ export interface TmTaskRow {
   projectId: string;
   title: string;
   status: string;
+  statusId: string;
   priority: string;
+  priorityId: string;
+  typeId: string;
+  typeLabel: string;
+  hasRemarks: boolean;
   assignee: string;
+  assigneeIds: string[];
   due: string;
-  /** YYYY-MM-DD — Day chart shows the task on this calendar day */
-  dueDate: string;
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  dueDate: string; // Alias for startDate
+  task_remarks?: string;
+  estimated_hours?: number;
+  spent_hours?: number;
+  artifacts: any[];
+  created_by?: string;
+  created_on?: string;
+  last_modified_by?: string;
+  last_modified_on?: string;
   /** Minutes from midnight (timeline start), e.g. 9:30 → 570 */
   scheduleStartMins: number;
   scheduleDurationMins: number;
 }
 
-function nextId(prefix: string, existing: string[]): string {
-  const nums = existing
-    .map(id => {
-      const m = id.match(new RegExp(`^${prefix}-(\\d+)$`));
-      return m ? parseInt(m[1]!, 10) : 0;
-    });
-  const n = (nums.length ? Math.max(...nums) : 0) + 1;
-  return `${prefix}-${String(n).padStart(4, '0')}`;
-}
-
 @Injectable({ providedIn: 'root' })
 export class TaskWorkspaceService {
-  constructor() {
-    queueMicrotask(() => {
-      for (const p of this.projects()) {
-        this.bumpProjectTotals(p.id);
-      }
-    });
+  readonly projects = signal<TmProjectRow[]>([]);
+  readonly tasks = signal<TmTaskRow[]>([]);
+  readonly loading = signal(false);
+
+  constructor(
+    private api: ApiService,
+    private auth: AuthService
+  ) {
+    this.loadAll();
   }
 
-  readonly projects = signal<TmProjectRow[]>([
-    { id: 'KP-0001', name: 'Test', status: 'Active', done: 12, total: 18, start: 'Mar 01', due: 'Apr 30' },
-    { id: 'KP-0002', name: 'Mobile App', status: 'Active', done: 7, total: 15, start: 'Feb 15', due: 'May 15' },
-    { id: 'KP-0003', name: 'Backend Services', status: 'Triage', done: 3, total: 10, start: 'Apr 01', due: '' },
-    { id: 'KP-0004', name: 'Content Strategy', status: 'Active', done: 9, total: 12, start: 'Jan 10', due: 'Apr 25' },
-    { id: 'KP-0005', name: 'Infrastructure', status: 'On Hold', done: 2, total: 8, start: 'Mar 20', due: '' },
-    { id: 'KP-0006', name: 'Customer Portal', status: 'Active', done: 5, total: 20, start: 'Mar 15', due: 'Jun 01' },
-    { id: 'KP-0007', name: 'Analytics Dashboard', status: 'Triage', done: 0, total: 6, start: 'Apr 10', due: '' },
-    { id: 'KP-0008', name: 'Legacy Migration', status: 'Completed', done: 15, total: 15, start: 'Jan 01', due: 'Mar 31' },
-  ]);
+  async loadAll() {
+    this.loading.set(true);
+    try {
+      const userId = this.auth.currentUser()?.user_id;
+      if (!userId) return;
 
-  readonly tasks = signal<TmTaskRow[]>([
-    { id: 'KT-0031', projectId: 'KP-0001', title: 'Homepage redesign', status: 'In Progress', priority: 'High', assignee: 'Alex Sterling', due: 'Apr 15', dueDate: '2026-04-15', scheduleStartMins: 9 * 60 + 30, scheduleDurationMins: 90 },
-    { id: 'KT-0032', projectId: 'KP-0003', title: 'API endpoint integration', status: 'Open', priority: 'Medium', assignee: 'Sarah Johnson', due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 11 * 60, scheduleDurationMins: 60 },
-    { id: 'KT-0028', projectId: 'KP-0005', title: 'Database migration script', status: 'Overdue', priority: 'High', assignee: 'Liam Nguyen', due: 'Apr 10', dueDate: '2026-04-10', scheduleStartMins: 8 * 60 + 30, scheduleDurationMins: 45 },
-    { id: 'KT-0033', projectId: 'KP-0004', title: 'Copy review — landing page', status: 'Open', priority: 'Low', assignee: 'Priya Kumar', due: 'Apr 22', dueDate: '2026-04-22', scheduleStartMins: 14 * 60, scheduleDurationMins: 40 },
-    { id: 'KT-0030', projectId: 'KP-0002', title: 'Bug fix #231 crash on login', status: 'In Progress', priority: 'High', assignee: 'James Hart', due: 'Apr 14', dueDate: '2026-04-14', scheduleStartMins: 10 * 60, scheduleDurationMins: 75 },
-    { id: 'KT-0034', projectId: 'KP-0001', title: 'Navigation bar responsive', status: 'Open', priority: 'Medium', assignee: 'Alex Sterling', due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 15 * 60 + 30, scheduleDurationMins: 50 },
-    { id: 'KT-0035', projectId: 'KP-0003', title: 'Sprint retrospective notes', status: 'Completed', priority: 'Low', assignee: 'Sarah Johnson', due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 10 * 60, scheduleDurationMins: 40 },
-    { id: 'KT-0036', projectId: 'KP-0004', title: 'Release notes draft', status: 'Open', priority: 'Medium', assignee: 'Priya Kumar', due: 'Apr 12', dueDate: '2026-04-12', scheduleStartMins: 12 * 60, scheduleDurationMins: 55 },
-    { id: 'KT-0019', projectId: 'KP-0002', title: 'QA report submission', status: 'Overdue', priority: 'High', assignee: 'Liam Nguyen', due: 'Apr 08', dueDate: '2026-04-08', scheduleStartMins: 9 * 60, scheduleDurationMins: 50 },
-    { id: 'KT-0022', projectId: 'KP-0001', title: 'Design handoff to dev', status: 'Overdue', priority: 'Medium', assignee: 'Alex Sterling', due: 'Apr 09', dueDate: '2026-04-09', scheduleStartMins: 13 * 60 + 15, scheduleDurationMins: 60 },
-    { id: 'KT-0025', projectId: 'KP-0005', title: 'Setup CI/CD pipeline', status: 'Triage', priority: 'High', assignee: 'James Hart', due: '', dueDate: '2026-04-20', scheduleStartMins: 16 * 60, scheduleDurationMins: 45 },
-    { id: 'KT-0027', projectId: 'KP-0002', title: 'User onboarding flow', status: 'Triage', priority: 'Medium', assignee: 'Priya Kumar', due: '', dueDate: '2026-04-25', scheduleStartMins: 11 * 60 + 45, scheduleDurationMins: 50 },
-  ]);
+      const [pRes, tRes] = await Promise.all([
+        firstValueFrom(this.api.get<Project[]>('getProjects', { user_id: userId })),
+        firstValueFrom(this.api.get<Task[]>('getTasks', { user_id: userId }))
+      ]) as [ApiResponse<Project[]>, ApiResponse<Task[]>];
+
+      if (pRes.success && pRes.data) {
+        this.projects.set(pRes.data.map(p => ({
+          id: p.project_id,
+          name: p.project_name,
+          status: p.project_status || 'Unknown',
+          done: p.task_done || 0,
+          total: p.task_total || 0,
+          start: p.project_start_date,
+          due: p.project_end_date
+        })));
+      }
+
+      if (tRes.success && tRes.data) {
+        this.tasks.set(tRes.data.map(t => this.mapToRow(t)));
+      }
+    } catch (err) {
+      console.error('Failed to load tasks workspace:', err);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  private mapToRow(t: Task): TmTaskRow {
+    return {
+      id: t.task_id,
+      projectId: t.project_id_fk,
+      title: t.task_title,
+      status: t.status_label || 'Open',
+      statusId: t.task_status_id,
+      priority: t.priority_label || 'Medium',
+      priorityId: t.priority_id,
+      typeId: t.type_id || 'T001',
+      typeLabel: t.type_label || 'Task',
+      hasRemarks: !!(t.task_remarks && t.task_remarks.trim()),
+      assignee: t.assignee_names || '',
+      assigneeIds: (t.task_assignees || '').split('|').filter(Boolean),
+      due: t.task_end_date ? new Date(t.task_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '',
+      startDate: t.task_start_date || '',
+      endDate: t.task_end_date || '',
+      startTime: t.task_start_time || '',
+      endTime: t.task_end_time || '',
+      dueDate: t.task_start_date || '',
+      task_remarks: t.task_remarks,
+      estimated_hours: t.estimated_hours,
+      spent_hours: t.spent_hours,
+      artifacts: t.artifacts || [],
+      created_by: t.created_by,
+      created_on: t.created_on,
+      last_modified_by: t.last_modified_by,
+      last_modified_on: t.last_modified_on,
+      scheduleStartMins: this.timeToMins(t.task_start_time || '10:00'),
+      scheduleDurationMins: this.calcDuration(t.task_start_time, t.task_end_time)
+    };
+  }
+
+  private timeToMins(s: string): number {
+    const parts = (s || '00:00').split(':');
+    const h = parseInt(parts[0] || '0', 10) || 0;
+    const m = parseInt(parts[1] || '0', 10) || 0;
+    return h * 60 + m;
+  }
+
+  private calcDuration(start?: string, end?: string): number {
+    if (!start || !end) return 45;
+    const s = this.timeToMins(start);
+    const e = this.timeToMins(end);
+    return Math.max(15, e - s);
+  }
 
   projectById(id: string): TmProjectRow | undefined {
     return this.projects().find(p => p.id === id);
@@ -79,57 +147,41 @@ export class TaskWorkspaceService {
     return this.projectById(id)?.name ?? 'Unknown project';
   }
 
-  addProject(row: Omit<TmProjectRow, 'id'>): TmProjectRow {
-    const id = nextId('KP', this.projects().map(p => p.id));
-    const p: TmProjectRow = { id, ...row };
-    this.projects.update(list => [...list, p]);
-    return p;
-  }
-
-  updateProject(id: string, patch: Partial<Omit<TmProjectRow, 'id'>>): void {
-    this.projects.update(list => list.map(p => (p.id === id ? { ...p, ...patch } : p)));
-  }
-
-  deleteProject(id: string): void {
-    this.projects.update(list => list.filter(p => p.id !== id));
-    this.tasks.update(list => list.filter(t => t.projectId !== id));
-  }
-
-  addTask(row: Omit<TmTaskRow, 'id'>): TmTaskRow {
-    const id = nextId('KT', this.tasks().map(t => t.id));
-    const t: TmTaskRow = {
-      id,
+  async addTask(row: any) {
+    const userId = this.auth.currentUser()?.user_id;
+    const payload = {
       ...row,
-      dueDate: row.dueDate || new Date().toISOString().slice(0, 10),
-      scheduleStartMins: row.scheduleStartMins ?? 10 * 60,
-      scheduleDurationMins: row.scheduleDurationMins ?? 45,
+      created_by: userId
     };
-    this.tasks.update(list => [...list, t]);
-    this.bumpProjectTotals(row.projectId);
-    return t;
-  }
-
-  updateTask(id: string, patch: Partial<Omit<TmTaskRow, 'id'>>): void {
-    const prev = this.tasks().find(t => t.id === id);
-    this.tasks.update(list => list.map(t => (t.id === id ? { ...t, ...patch } : t)));
-    if (prev && patch.projectId !== undefined && patch.projectId !== prev.projectId) {
-      this.bumpProjectTotals(prev.projectId);
-      this.bumpProjectTotals(patch.projectId);
-    } else if (prev && (patch.status !== undefined || patch.title !== undefined)) {
-      this.bumpProjectTotals(prev.projectId);
+    const res = await firstValueFrom(this.api.post<Task>('createTask', payload)) as ApiResponse<Task>;
+    if (res.success && res.data) {
+      this.loadAll();
+      return res.data;
     }
+    throw new Error(res.error || 'Failed to create task');
   }
 
-  deleteTask(id: string): void {
-    const prev = this.tasks().find(t => t.id === id);
-    this.tasks.update(list => list.filter(t => t.id !== id));
-    if (prev) this.bumpProjectTotals(prev.projectId);
+  async updateTask(id: string, patch: any) {
+    const payload = {
+      task_id: id,
+      ...patch,
+      last_modified_by: this.auth.currentUser()?.user_id
+    };
+    const res = await firstValueFrom(this.api.post<any>('updateTask', payload)) as ApiResponse<any>;
+    if (res.success) {
+      // Re-fetch or locally update
+      this.loadAll(); 
+      return true;
+    }
+    throw new Error(res.error || 'Failed to update task');
   }
 
-  /** Recompute done/total for a project from tasks (total = all tasks, done = completed). */
-  private bumpProjectTotals(projectId: string): void {
-    const ts = this.tasks().filter(t => t.projectId === projectId);
-    const done = ts.filter(t => t.status === 'Completed').length;
-    this.updateProject(projectId, { done, total: ts.length });
+  async deleteTask(id: string) {
+    const res = await firstValueFrom(this.api.get<any>('deleteTask', { task_id: id })) as ApiResponse<any>;
+    if (res.success) {
+      this.loadAll();
+      return true;
+    }
+    throw new Error(res.error || 'Failed to delete task');
   }
 }

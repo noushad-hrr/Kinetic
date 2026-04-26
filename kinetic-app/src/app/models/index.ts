@@ -74,6 +74,18 @@ export interface ProjectArtifact {
   created_on?: string;
 }
 
+export interface TaskArtifact {
+  task_artifact_id?: string;
+  task_id_fk?: string;
+  artifact_title: string;
+  artifact_value: string;
+  artifact_type: string;
+  description?: string;
+  is_sensitive?: boolean;
+  created_by?: string;
+  created_on?: string;
+}
+
 export interface UserProjectMapping {
   mapping_id: string;
   user_id_fk: string;
@@ -86,7 +98,44 @@ export interface UserProjectMapping {
 export interface Masters {
   roles: Role[];
   users: { user_id: string; display_name: string; username: string; email: string }[];
-  statuses?: { status_id: string; status_name: string; status_label: string; sort_order: number }[];
+  statuses: { status_id: string; status_name: string; status_label: string; sort_order: number }[];
+  priorities: { priority_id: string; priority_name: string; priority_label: string; color_code: string }[];
+  task_types: { type_id: string; type_name: string; type_label: string; icon_name: string }[];
+}
+
+// ─── Tasks ───────────────────────────────────────────────────────────────────
+export interface Task {
+  task_id: string;
+  project_id_fk: string;
+  task_title: string;
+  task_remarks?: string;
+  task_status_id: string;
+  task_assignees?: string; // Pipe separated user IDs
+  task_start_date: string;
+  task_end_date: string;
+  task_start_time: string;
+  task_end_time: string;
+  task_order_id: number;
+  type_id: string;
+  priority_id: string;
+  estimated_hours?: number;
+  spent_hours?: number;
+  created_by: string;
+  created_on: string;
+  artifacts?: TaskArtifact[];
+  last_modified_by?: string;
+  last_modified_on?: string;
+  
+  // Enriched fields from backend
+  project_name?: string;
+  status_label?: string;
+  priority_label?: string;
+  type_label?: string;
+  assignee_names?: string;
+  
+  // UI helper fields (mappings for older logic)
+  status?: string; 
+  priority?: string;
 }
 
 // ─── API Response ─────────────────────────────────────────────────────────────

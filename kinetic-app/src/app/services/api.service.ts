@@ -139,4 +139,42 @@ export class ApiService {
   getMasters() {
     return this.call<Masters>('getMasters');
   }
+
+  // ─── Generic Helpers ─────────────────────────────────────────────────────────
+
+  get<T>(action: string, params: Record<string, string> = {}): Observable<ApiResponse<T>> {
+    let httpParams = new HttpParams().set('action', action);
+    Object.keys(params).forEach(k => {
+      if (params[k] !== undefined && params[k] !== null && params[k] !== '') {
+        httpParams = httpParams.set(k, params[k]);
+      }
+    });
+
+    return this.http.get<ApiResponse<T>>(this.base, { params: httpParams }).pipe(
+      catchError(err => {
+        const msg = err?.error?.error || err?.message || 'Network error';
+        return throwError(() => new Error(msg));
+      })
+    );
+  }
+
+  post<T>(action: string, body: unknown, params: Record<string, string> = {}): Observable<ApiResponse<T>> {
+    let httpParams = new HttpParams().set('action', action);
+    Object.keys(params).forEach(k => {
+      if (params[k] !== undefined && params[k] !== null && params[k] !== '') {
+        httpParams = httpParams.set(k, params[k]);
+      }
+    });
+
+    if (body) {
+      httpParams = httpParams.set('data', JSON.stringify(body));
+    }
+
+    return this.http.get<ApiResponse<T>>(this.base, { params: httpParams }).pipe(
+      catchError(err => {
+        const msg = err?.error?.error || err?.message || 'Network error';
+        return throwError(() => new Error(msg));
+      })
+    );
+  }
 }

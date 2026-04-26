@@ -1,11 +1,23 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormBuilder, Validators, FormArray, AbstractControl, ValidationErrors } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { TaskWorkspaceService, TmTaskRow } from '../../services/task-workspace.service';
 import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.component';
 import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialog.component';
+import { MastersService } from '../../services/masters.service';
+import { ToastService } from '../../services/toast.service';
+
+function dateTimeRangeValidator(group: AbstractControl): ValidationErrors | null {
+  const startDate = group.get('task_start_date')?.value;
+  const endDate   = group.get('task_end_date')?.value;
+  const startTime = group.get('task_start_time')?.value;
+  const endTime   = group.get('task_end_time')?.value;
+  if (startDate && endDate && startDate > endDate) return { dateRangeInvalid: true };
+  if (startDate && endDate && startDate === endDate && startTime && endTime && startTime >= endTime) return { timeRangeInvalid: true };
+  return null;
+}
 
 /** Full day: midnight → end of day (24h timeline) */
 const DAY_START_MINS = 0;
@@ -25,61 +37,92 @@ export interface DayChartBlock {
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, DrawerPanelComponent, ConfirmDialogComponent],
   template: `
-    <div class="p-4 max-w-7xl mx-auto space-y-4">
+    <div class="p-4 max-w-7xl mx-auto space-y-4" (click)="openDropdown.set(null)">
 
-      <div class="k-page-intro py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div class="min-w-0">
-          <h1 class="text-sm font-semibold text-slate-900 tracking-tight">Tasks</h1>
-          <p class="text-xs text-slate-500 mt-0.5">
-            <span class="font-medium text-slate-700">Day chart</span> shows the full 24-hour day; switch to list for dense tables. Scoped by project when you arrive from Projects.
-          </p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <select [ngModel]="projectScope()" (ngModelChange)="onProjectScope($event)"
-                  class="text-xs font-medium border border-slate-200 dark:border-[#3c3c3c] rounded-lg px-3 py-2 bg-white dark:bg-[#252526] text-slate-800 dark:text-neutral-200 min-w-[200px] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-            <option value="">All projects</option>
-            @for (p of ws.projects(); track p.id) {
-              <option [value]="p.id">{{ p.name }} ({{ p.id }})</option>
-            }
-          </select>
-          <a routerLink="/tasks-manager/projects"
-             class="inline-flex items-center gap-1 text-xs font-semibold text-primary dark:text-neutral-300 px-2 py-2 rounded-lg hover:bg-primary/5 dark:hover:bg-white/[0.06]">
-            <span class="material-symbols-outlined text-[16px]">folder_open</span>
-            Projects
-          </a>
-        </div>
+      <!-- FIRST LINE: summary stats -->
+      <div class="flex flex-wrap items-center gap-2">
+        @for (s of summaryStats(); track s.label) {
+          <div class="flex items-center gap-1.5 bg-white dark:bg-[#252526] border border-slate-100 dark:border-[#3c3c3c] rounded-lg px-3 py-1.5 shadow-sm">
+            <span class="font-bold text-slate-900 dark:text-neutral-100 tabular-nums">{{ s.value }}</span>
+            <span class="text-[11px] text-slate-500 dark:text-neutral-500">{{ s.label }}</span>
+          </div>
+        }
       </div>
 
-      @if (scopedProject(); as sp) {
-        <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/15 text-xs text-primary dark:bg-white/[0.06] dark:border-[#3c3c3c] dark:text-neutral-200">
-          <span class="material-symbols-outlined text-[18px]">filter_alt</span>
-          <span>Showing tasks for <strong class="font-semibold">{{ sp.name }}</strong>. Clear the project filter to see everything.</span>
-        </div>
-      }
-
+      <!-- SECOND LINE: Filters & Actions -->
       <div class="flex flex-wrap items-center gap-2">
-        <div class="inline-flex rounded-lg border border-slate-200 dark:border-[#3c3c3c] bg-white dark:bg-[#252526] p-0.5 shadow-sm">
-          <button type="button"
-                  class="px-3 py-1.5 rounded-md text-2xs font-bold uppercase tracking-wide transition-colors"
-                  [class]="viewMode() === 'day' ? 'bg-primary text-white dark:bg-[#3e3e42] dark:text-neutral-100 shadow-sm' : 'text-slate-600 dark:text-neutral-400 hover:bg-slate-50 dark:hover:bg-[#2a2d2e]'"
-                  (click)="setView('day')">
-            <span class="material-symbols-outlined text-[14px] align-middle mr-1">calendar_view_day</span>
-            Day chart
-          </button>
-          <button type="button"
-                  class="px-3 py-1.5 rounded-md text-2xs font-bold uppercase tracking-wide transition-colors"
-                  [class]="viewMode() === 'list' ? 'bg-primary text-white dark:bg-[#3e3e42] dark:text-neutral-100 shadow-sm' : 'text-slate-600 dark:text-neutral-400 hover:bg-slate-50 dark:hover:bg-[#2a2d2e]'"
-                  (click)="setView('list')">
-            <span class="material-symbols-outlined text-[14px] align-middle mr-1">view_list</span>
-            List
-          </button>
+        <div class="relative flex-1 min-w-[200px] max-w-xs">
+          <span class="absolute left-2.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-[16px] text-slate-400">search</span>
+          <input [ngModel]="searchFilter()" (ngModelChange)="searchFilter.set($event)" type="text" placeholder="Search tasks…"
+                 class="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
         </div>
-        @if (viewMode() === 'day') {
-          <div class="relative">
-            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-[16px] text-slate-400">search</span>
-            <input [(ngModel)]="search" type="text" placeholder="Filter day…"
-                   class="pl-8 pr-3 py-1.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] w-36 sm:w-44 focus:outline-none focus:ring-2 focus:ring-primary/20">
+
+        <!-- Multi-select Projects -->
+        <div class="relative">
+          <button type="button" (click)="toggleDropdown($event, 'projects')"
+                  class="flex items-center gap-2 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg px-3 py-2 bg-white dark:bg-[#252526] text-slate-700 dark:text-neutral-200 hover:bg-slate-50 transition-colors">
+            Projects @if(selectedProjects().length > 0) { <span class="bg-primary text-white text-[9px] px-1 rounded-full">{{selectedProjects().length}}</span> }
+            <span class="material-symbols-outlined text-[16px]">expand_more</span>
+          </button>
+          <div *ngIf="openDropdown() === 'projects'" class="absolute left-0 top-full mt-1 w-48 bg-white dark:bg-[#252526] border border-slate-200 dark:border-[#3c3c3c] rounded-lg shadow-xl z-50 py-1 animate-fade-in">
+            <div class="max-h-60 overflow-y-auto px-2">
+              @for (p of ws.projects(); track p.id) {
+                <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-white/[0.05] rounded cursor-pointer transition-colors">
+                  <input type="checkbox" [checked]="selectedProjects().includes(p.id)" (change)="toggleProject(p.id)"
+                         class="w-3.5 h-3.5 rounded border-slate-300 text-primary focus:ring-primary/20">
+                  <span class="text-xs truncate">{{ p.name }}</span>
+                </label>
+              }
+            </div>
           </div>
+        </div>
+
+        @if (viewMode() === 'list') {
+          <!-- Multi-select Status -->
+          <div class="relative">
+            <button type="button" (click)="toggleDropdown($event, 'status')"
+                    class="flex items-center gap-2 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg px-3 py-2 bg-white dark:bg-[#252526] text-slate-700 dark:text-neutral-200 hover:bg-slate-50 transition-colors">
+              Status @if(selectedStatuses().length > 0) { <span class="bg-primary text-white text-[9px] px-1 rounded-full">{{selectedStatuses().length}}</span> }
+              <span class="material-symbols-outlined text-[16px]">expand_more</span>
+            </button>
+            <div *ngIf="openDropdown() === 'status'" class="absolute left-0 top-full mt-1 w-40 bg-white dark:bg-[#252526] border border-slate-200 dark:border-[#3c3c3c] rounded-lg shadow-xl z-50 py-1 animate-fade-in">
+              @for (st of masters.statuses(); track st.status_id) {
+                <label class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-white/[0.05] rounded cursor-pointer transition-colors">
+                  <input type="checkbox" [checked]="selectedStatuses().includes(st.status_label || st.status_name)" (change)="toggleStatus(st.status_label || st.status_name)"
+                         class="w-3.5 h-3.5 rounded border-slate-300 text-primary focus:ring-primary/20">
+                  <span class="text-xs">{{ st.status_label || st.status_name }}</span>
+                </label>
+              }
+            </div>
+          </div>
+
+          <!-- Multi-select Priority -->
+          <div class="relative">
+            <button type="button" (click)="toggleDropdown($event, 'priority')"
+                    class="flex items-center gap-2 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg px-3 py-2 bg-white dark:bg-[#252526] text-slate-700 dark:text-neutral-200 hover:bg-slate-50 transition-colors">
+              Priority @if(selectedPriorities().length > 0) { <span class="bg-primary text-white text-[9px] px-1 rounded-full">{{selectedPriorities().length}}</span> }
+              <span class="material-symbols-outlined text-[16px]">expand_more</span>
+            </button>
+            <div *ngIf="openDropdown() === 'priority'" class="absolute left-0 top-full mt-1 w-40 bg-white dark:bg-[#252526] border border-slate-200 dark:border-[#3c3c3c] rounded-lg shadow-xl z-50 py-1 animate-fade-in">
+              @for (pr of masters.priorities(); track pr.priority_id) {
+                <label class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-white/[0.05] rounded cursor-pointer transition-colors">
+                  <input type="checkbox" [checked]="selectedPriorities().includes(pr.priority_label || pr.priority_name)" (change)="togglePriority(pr.priority_label || pr.priority_name)"
+                         class="w-3.5 h-3.5 rounded border-slate-300 text-primary focus:ring-primary/20">
+                  <span class="text-xs">{{ pr.priority_label || pr.priority_name }}</span>
+                </label>
+              }
+            </div>
+          </div>
+
+          <!-- Date Filters -->
+          <div class="flex items-center gap-1.5">
+            <input type="date" [ngModel]="startDateFilter()" (ngModelChange)="startDateFilter.set($event)"
+                   class="text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg px-2 py-2 bg-white dark:bg-[#252526] text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary" title="Start date">
+            <span class="text-[10px] text-slate-400">to</span>
+            <input type="date" [ngModel]="endDateFilter()" (ngModelChange)="endDateFilter.set($event)"
+                   class="text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg px-2 py-2 bg-white dark:bg-[#252526] text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary" title="End date">
+          </div>
+        } @else {
           <label class="inline-flex items-center gap-2 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider">
             <span>Day</span>
             <input type="date" [ngModel]="selectedDay()" (ngModelChange)="selectedDay.set($event)"
@@ -88,19 +131,42 @@ export interface DayChartBlock {
           <button type="button"
                   class="text-2xs font-bold uppercase tracking-wide px-3 py-1.5 rounded-lg border border-slate-200 dark:border-[#3c3c3c] text-slate-700 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-[#2a2d2e] transition-colors"
                   (click)="goToday()">Today</button>
-          <span class="text-2xs text-slate-400 dark:text-neutral-500 tabular-nums">
-            {{ chartFiltered().length }} blocks · {{ chartDoneCount() }} done
-          </span>
         }
-        <div class="flex-1"></div>
-        @if (viewMode() === 'list') {
-          <button type="button"
-                  class="inline-flex items-center gap-1.5 bg-primary dark:bg-[#3e3e42] text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-primary/90 dark:hover:bg-[#4a4a4a] shadow-sm"
-                  (click)="openTaskModal(null)">
-            <span class="material-symbols-outlined text-[16px]">add</span>
-            New task
+
+        @if (searchFilter() || selectedStatuses().length || selectedPriorities().length || selectedProjects().length || startDateFilter() || endDateFilter()) {
+          <button type="button" (click)="clearFilters()" class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 flex items-center gap-1 transition-colors border border-transparent hover:border-slate-200 rounded focus:outline-none">
+            <span class="material-symbols-outlined text-[14px]">clear_all</span>
+            Clear
           </button>
         }
+
+        <div class="flex-1"></div>
+
+        <button type="button" (click)="ws.loadAll()" class="flex items-center text-slate-400 hover:text-primary transition-colors focus:outline-none px-1" title="Refresh tasks">
+          <span class="material-symbols-outlined text-[18px]" [class.animate-spin]="ws.loading()">refresh</span>
+        </button>
+
+        <div class="inline-flex rounded-lg border border-slate-200 dark:border-[#3c3c3c] bg-white dark:bg-[#252526] p-0.5 shadow-sm">
+          <button type="button"
+                  class="px-3 py-1.5 rounded-md text-2xs font-bold uppercase tracking-wide transition-colors"
+                  [class]="viewMode() === 'day' ? 'bg-primary text-white dark:bg-[#3e3e42] dark:text-neutral-100 shadow-sm' : 'text-slate-600 dark:text-neutral-400 hover:bg-slate-50 dark:hover:bg-[#2a2d2e]'"
+                  (click)="setView('day')">
+            Day
+          </button>
+          <button type="button"
+                  class="px-3 py-1.5 rounded-md text-2xs font-bold uppercase tracking-wide transition-colors"
+                  [class]="viewMode() === 'list' ? 'bg-primary text-white dark:bg-[#3e3e42] dark:text-neutral-100 shadow-sm' : 'text-slate-600 dark:text-neutral-400 hover:bg-slate-50 dark:hover:bg-[#2a2d2e]'"
+                  (click)="setView('list')">
+            List
+          </button>
+        </div>
+
+        <button type="button"
+                class="inline-flex items-center gap-1.5 bg-primary dark:bg-[#3e3e42] text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-primary/90 dark:hover:bg-[#4a4a4a] shadow-sm"
+                (click)="openTaskModal(null)">
+          <span class="material-symbols-outlined text-[16px]">add</span>
+          New task
+        </button>
       </div>
 
       @if (viewMode() === 'day') {
@@ -110,12 +176,9 @@ export interface DayChartBlock {
               <span class="material-symbols-outlined text-[18px] text-slate-500 dark:text-neutral-500">schedule</span>
               <span class="text-xs font-semibold text-slate-800 dark:text-neutral-100 truncate">{{ prettyDayLabel() }}</span>
             </div>
-            <button type="button"
-                    class="inline-flex items-center gap-1 text-2xs font-bold uppercase tracking-wide text-primary dark:text-neutral-300 hover:underline"
-                    (click)="openTaskModal(null)">
-              <span class="material-symbols-outlined text-[14px]">add_task</span>
-              Add task
-            </button>
+            <span class="text-2xs text-slate-400 dark:text-neutral-500 tabular-nums">
+              {{ chartFiltered().length }} blocks · {{ chartDoneCount() }} done
+            </span>
           </div>
           <div class="flex flex-1 min-h-0 overflow-auto">
             <div class="w-[3.25rem] sm:w-14 flex-shrink-0 border-r border-slate-100 dark:border-[#3c3c3c] bg-slate-50/50 dark:bg-[#1e1e1e] text-right pr-1.5 sm:pr-2 pt-0.5 select-none">
@@ -159,6 +222,10 @@ export interface DayChartBlock {
                       </div>
                     </label>
                     <div class="flex flex-col border-l border-slate-100 dark:border-[#3c3c3c] bg-slate-50/50 dark:bg-[#252526] shrink-0">
+                      <button type="button" class="p-1.5 text-slate-400 hover:text-primary dark:hover:text-neutral-200" title="View"
+                              (click)="viewTask(b.task)">
+                        <span class="material-symbols-outlined text-[16px]">visibility</span>
+                      </button>
                       <button type="button" class="p-1.5 text-slate-400 hover:text-primary dark:hover:text-neutral-200" title="Edit"
                               (click)="openTaskModal(b.task)">
                         <span class="material-symbols-outlined text-[16px]">edit</span>
@@ -180,36 +247,7 @@ export interface DayChartBlock {
       }
 
       @if (viewMode() === 'list') {
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="relative">
-            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-[16px] text-slate-400">search</span>
-            <input [(ngModel)]="search" type="text" placeholder="Search tasks…"
-                   class="pl-8 pr-3 py-2 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] w-48 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-          </div>
-          <select [(ngModel)]="statusFilter"
-                  class="text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg px-3 py-2 bg-white dark:bg-[#252526] text-slate-700 dark:text-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-            <option value="">All status</option>
-            <option>Open</option><option>In Progress</option><option>Completed</option><option>Overdue</option><option>Triage</option>
-          </select>
-          <select [(ngModel)]="priorityFilter"
-                  class="text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg px-3 py-2 bg-white dark:bg-[#252526] text-slate-700 dark:text-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-            <option value="">All priority</option>
-            <option>High</option><option>Medium</option><option>Low</option>
-          </select>
-        </div>
-
-        <div class="flex items-center gap-1.5 flex-wrap">
-          @for (tab of statusTabs; track tab) {
-            <button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors"
-                    [class]="activeTab() === tab ? 'bg-primary dark:bg-[#3e3e42] text-white shadow-sm' : 'bg-white dark:bg-[#252526] text-slate-600 dark:text-neutral-300 border border-slate-200 dark:border-[#3c3c3c] hover:border-primary/40 hover:text-primary dark:hover:border-neutral-500'"
-                    (click)="activeTab.set(tab)">
-              {{ tab }}
-              <span class="ml-1 text-2xs opacity-80 tabular-nums">{{ countByStatus(tab) }}</span>
-            </button>
-          }
-        </div>
-
-        <div class="bg-white dark:bg-[#252526] rounded-xl border border-slate-100 dark:border-[#3c3c3c] shadow-sm overflow-hidden">
+        <div class="bg-white dark:bg-[#252526] rounded-xl border border-slate-100 dark:border-[#3c3c3c] shadow-sm overflow-hidden flex flex-col">
           <table class="w-full text-xs">
             <thead>
               <tr class="bg-slate-50/90 dark:bg-[#1e1e1e] border-b border-slate-100 dark:border-[#3c3c3c]">
@@ -217,16 +255,28 @@ export interface DayChartBlock {
                 <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden sm:table-cell">Project</th>
                 <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider">Status</th>
                 <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden md:table-cell">Priority</th>
-                <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Assignee</th>
-                <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Due</th>
+                <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Type</th>
+                <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Start</th>
+                <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">End</th>
+                <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Time</th>
+                <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Hours (S/E)</th>
+                <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Assignees</th>
                 <th class="text-right px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
-              @for (t of filtered(); track t.id) {
+              @for (t of paginatedTasks(); track t.id) {
                 <tr class="border-b border-slate-50 dark:border-[#2d2d2d] hover:bg-slate-50/60 dark:hover:bg-[#2a2d2e]/60 transition-colors">
                   <td class="px-3 py-2.5">
-                    <p class="font-semibold text-slate-800 dark:text-neutral-100 truncate max-w-[240px]">{{ t.title }}</p>
+                    <div class="flex items-center gap-2">
+                      <p class="font-semibold text-slate-800 dark:text-neutral-100 truncate max-w-[200px]">{{ t.title }}</p>
+                      @if (t.hasRemarks) {
+                        <span class="material-symbols-outlined text-[14px] text-slate-400" title="Has remarks">notes</span>
+                      }
+                      @if (t.artifacts?.length) {
+                        <span class="material-symbols-outlined text-[14px] text-slate-400" title="Has attachments">attach_file</span>
+                      }
+                    </div>
                     <p class="text-2xs text-slate-400 font-mono">{{ t.id }}</p>
                   </td>
                   <td class="px-3 py-2.5 text-slate-600 dark:text-neutral-400 hidden sm:table-cell">
@@ -238,17 +288,27 @@ export interface DayChartBlock {
                   <td class="px-3 py-2.5 hidden md:table-cell">
                     <span class="px-2 py-0.5 rounded-md text-2xs font-semibold" [class]="priorityClass(t.priority)">{{ t.priority }}</span>
                   </td>
+                  <td class="px-3 py-2.5 hidden lg:table-cell">
+                    <span class="text-2xs text-slate-600 dark:text-neutral-400">{{ t.typeLabel }}</span>
+                  </td>
+                  <td class="px-3 py-2.5 text-2xs text-slate-500 dark:text-neutral-400 hidden lg:table-cell">{{ t.startDate | date:'MMM d' }}</td>
+                  <td class="px-3 py-2.5 text-2xs text-slate-500 dark:text-neutral-400 hidden lg:table-cell">{{ t.endDate | date:'MMM d' }}</td>
+                  <td class="px-3 py-2.5 text-2xs font-medium text-slate-700 dark:text-neutral-300 hidden lg:table-cell">{{ t.startTime }} - {{ t.endTime }}</td>
+                  <td class="px-3 py-2.5 text-2xs font-semibold text-slate-700 dark:text-neutral-300 hidden lg:table-cell">{{ t.spent_hours || 0 }} / {{ t.estimated_hours || 0 }}h</td>
                   <td class="px-3 py-2.5 text-slate-600 dark:text-neutral-400 hidden lg:table-cell">
                     <div class="flex items-center gap-1.5">
-                      <div class="w-5 h-5 rounded-full bg-primary/15 dark:bg-[#3c3c3c] flex items-center justify-center text-[9px] font-bold text-primary dark:text-neutral-200">
+                      <div class="w-5 h-5 rounded-full bg-primary/15 dark:bg-[#3c3c3c] flex items-center justify-center text-[9px] font-bold text-primary dark:text-neutral-200" [title]="t.assignee">
                         {{ initials(t.assignee) }}
                       </div>
-                      <span class="truncate max-w-[100px]">{{ t.assignee }}</span>
+                      <span class="truncate max-w-[80px]">{{ t.assignee }}</span>
                     </div>
                   </td>
-                  <td class="px-3 py-2.5 hidden lg:table-cell" [class]="t.status === 'Overdue' ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-slate-500 dark:text-neutral-500'">{{ t.due || '—' }}</td>
                   <td class="px-3 py-2.5 text-right">
                     <div class="flex justify-end gap-0.5">
+                      <button type="button" class="p-1.5 text-slate-400 hover:text-primary dark:hover:text-neutral-200 rounded-lg hover:bg-slate-100 dark:hover:bg-[#2a2d2e]" title="View"
+                              (click)="viewTask(t)">
+                        <span class="material-symbols-outlined text-[16px]">visibility</span>
+                      </button>
                       <button type="button" class="p-1.5 text-slate-400 hover:text-primary dark:hover:text-neutral-200 rounded-lg hover:bg-slate-100 dark:hover:bg-[#2a2d2e]" title="Edit"
                               (click)="openTaskModal(t)">
                         <span class="material-symbols-outlined text-[16px]">edit</span>
@@ -261,12 +321,61 @@ export interface DayChartBlock {
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="7" class="px-3 py-12 text-center text-slate-400 dark:text-neutral-500 text-xs">No tasks match your filters.</td></tr>
+                <tr><td colspan="11" class="px-3 py-12 text-center text-slate-400 dark:text-neutral-500 text-xs">No tasks match your filters.</td></tr>
               }
             </tbody>
           </table>
+
+          <!-- Pagination controls -->
+          @if (filteredTasks().length > 0) {
+            <div class="flex items-center justify-between px-3 py-2 border-t border-slate-100 dark:border-[#3c3c3c] bg-slate-50/50 dark:bg-[#1e1e1e]">
+              <div class="flex items-center gap-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-2xs text-slate-400 dark:text-neutral-500">Show</span>
+                  <select [ngModel]="pageSize()" (ngModelChange)="setPageSize($event)"
+                          class="text-xs border border-slate-200 dark:border-[#3c3c3c] rounded px-1.5 py-0.5 bg-white dark:bg-[#252526] text-slate-700 dark:text-neutral-200 focus:outline-none focus:ring-1 focus:ring-primary/25 focus:border-primary">
+                    <option [value]="5">5</option>
+                    <option [value]="10">10</option>
+                    <option [value]="25">25</option>
+                    <option [value]="50">50</option>
+                    <option [value]="100">100</option>
+                  </select>
+                </div>
+                <p class="text-2xs text-slate-400 dark:text-neutral-500">
+                  Showing {{ startIndex() + 1 }} to {{ endIndex() }} of {{ filteredTasks().length }} entries
+                </p>
+              </div>
+              <div class="flex items-center gap-1">
+                <button (click)="prevPage()" [disabled]="currentPage() === 1" 
+                        class="px-2 py-1 border border-slate-200 dark:border-[#3c3c3c] rounded text-xs bg-white dark:bg-[#252526] text-slate-600 dark:text-neutral-300 disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-[#2a2d2e] transition-colors focus:outline-none">
+                  Prev
+                </button>
+                
+                @for (p of pages(); track $index) {
+                  @if (p === '...') {
+                    <span class="px-1 text-xs text-slate-400 dark:text-neutral-500">...</span>
+                  } @else {
+                    <button (click)="setPage(p)" 
+                            [class.bg-primary]="p === currentPage()" 
+                            [class.text-white]="p === currentPage()"
+                            [class.border-primary]="p === currentPage()"
+                            [class.bg-white]="p !== currentPage()"
+                            [class.text-slate-600]="p !== currentPage()"
+                            [class.border-slate-200]="p !== currentPage()"
+                            class="min-w-[28px] px-2 py-1 border rounded text-xs hover:bg-slate-50 dark:hover:bg-[#2a2d2e] transition-colors focus:outline-none dark:bg-[#252526] dark:text-neutral-300 dark:border-[#3c3c3c]">
+                      {{ p }}
+                    </button>
+                  }
+                }
+
+                <button (click)="nextPage()" [disabled]="currentPage() === totalPages() || totalPages() === 0" 
+                        class="px-2 py-1 border border-slate-200 dark:border-[#3c3c3c] rounded text-xs bg-white dark:bg-[#252526] text-slate-600 dark:text-neutral-300 disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-[#2a2d2e] transition-colors focus:outline-none">
+                  Next
+                </button>
+              </div>
+            </div>
+          }
         </div>
-        <p class="text-2xs text-slate-400 dark:text-neutral-500">Showing {{ filtered().length }} of {{ tasksInScope().length }} tasks in scope</p>
       }
     </div>
 
@@ -278,73 +387,189 @@ export interface DayChartBlock {
       (closed)="closeTaskModal()"
       (backdropClose)="closeTaskModal()">
       @if (taskForm) {
-        <form [formGroup]="taskForm" class="space-y-3">
-          <div>
-            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Title</label>
-            <input formControlName="title" type="text" placeholder="What needs to be done?"
-                   class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-            @if (taskForm.get('title')?.invalid && taskForm.get('title')?.touched) {
-              <p class="text-red-600 text-2xs mt-1">Title is required</p>
-            }
-          </div>
-          <div>
-            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Project</label>
-            <select formControlName="projectId"
-                    class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-              @for (p of ws.projects(); track p.id) {
-                <option [value]="p.id">{{ p.name }} ({{ p.id }})</option>
+        <form [formGroup]="taskForm" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="md:col-span-2">
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Task Title</label>
+              <input formControlName="task_title" type="text" placeholder="What needs to be done?"
+                     class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+              @if (taskForm.get('task_title')?.invalid && taskForm.get('task_title')?.touched) {
+                <p class="text-red-500 text-[10px] mt-1">Title is required</p>
               }
-            </select>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
+            </div>
+
+            <div>
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Project</label>
+              <select formControlName="project_id_fk"
+                      class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                <option value="">Select Project</option>
+                @for (p of activeProjects(); track p.id) {
+                  <option [value]="p.id">{{ p.name }} — {{ p.status }}</option>
+                }
+              </select>
+              @if (taskForm.get('project_id_fk')?.invalid && taskForm.get('project_id_fk')?.touched) {
+                <p class="text-red-500 text-[10px] mt-1">Project is required</p>
+              }
+            </div>
+
+            <div>
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Task Type</label>
+              <select formControlName="type_id"
+                      class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                @for (t of masters.taskTypes(); track t.type_id) {
+                  <option [value]="t.type_id">{{ t.type_label }}</option>
+                }
+              </select>
+            </div>
+
             <div>
               <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Status</label>
-              <select formControlName="status"
+              <select formControlName="task_status_id"
                       class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-                <option>Open</option>
-                <option>In Progress</option>
-                <option>Completed</option>
-                <option>Overdue</option>
-                <option>Triage</option>
+                @for (s of masters.statuses(); track s.status_id) {
+                  <option [value]="s.status_id">{{ s.status_label }}</option>
+                }
               </select>
             </div>
+
             <div>
               <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Priority</label>
-              <select formControlName="priority"
+              <select formControlName="priority_id"
                       class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-                <option>High</option>
-                <option>Medium</option>
-                <option>Low</option>
+                @for (pr of masters.priorities(); track pr.priority_id) {
+                  <option [value]="pr.priority_id">{{ pr.priority_label }}</option>
+                }
               </select>
             </div>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
+
             <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Assignee</label>
-              <input formControlName="assignee" type="text" placeholder="Name"
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Start Date</label>
+              <input formControlName="task_start_date" type="date"
+                     [class.border-red-400]="taskForm.errors?.['dateRangeInvalid'] && taskForm.touched"
                      class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
             </div>
+
             <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Due label</label>
-              <input formControlName="due" type="text" placeholder="e.g. Apr 20 (optional)"
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Due Date</label>
+              <input formControlName="task_end_date" type="date"
+                     [class.border-red-400]="taskForm.errors?.['dateRangeInvalid'] && taskForm.touched"
+                     class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+              @if (taskForm.errors?.['dateRangeInvalid'] && taskForm.touched) {
+                <p class="text-red-500 text-[10px] mt-1">End date cannot be before start date</p>
+              }
+            </div>
+
+            <div>
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Start Time</label>
+              <input formControlName="task_start_time" type="time"
+                     [class.border-red-400]="taskForm.errors?.['timeRangeInvalid'] && taskForm.touched"
                      class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
             </div>
-          </div>
-          <div>
-            <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Schedule day (Day chart)</label>
-            <input formControlName="dueDate" type="date"
-                   class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-          </div>
-          <div class="grid grid-cols-2 gap-3">
+
             <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Start time</label>
-              <input formControlName="scheduleTime" type="time"
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">End Time</label>
+              <input formControlName="task_end_time" type="time"
+                     [class.border-red-400]="taskForm.errors?.['timeRangeInvalid'] && taskForm.touched"
                      class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+              @if (taskForm.errors?.['timeRangeInvalid'] && taskForm.touched) {
+                <p class="text-red-500 text-[10px] mt-1">End time must be after start time on the same date</p>
+              }
             </div>
+
+            <div class="md:col-span-2">
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Assignees</label>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-slate-50 dark:bg-[#1e1e1e] max-h-[150px] overflow-y-auto">
+                @for (u of masters.users(); track u.user_id) {
+                  <label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white dark:hover:bg-[#2d2d2d] cursor-pointer transition-colors">
+                    <input type="checkbox"
+                           [checked]="selectedAssigneeIds().includes(u.user_id)"
+                           (change)="toggleAssignee(u.user_id)"
+                           class="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary/20">
+                    <span class="text-xs text-slate-700 dark:text-slate-300 truncate">{{ u.display_name }}</span>
+                  </label>
+                }
+              </div>
+              <p class="text-[10px] text-slate-400 mt-1">Select one or more team members</p>
+              @if (taskForm.touched && selectedAssigneeIds().length === 0) {
+                <p class="text-[10px] text-red-500 mt-0.5">At least one assignee is required</p>
+              }
+            </div>
+
+            <div class="md:col-span-2">
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Remarks</label>
+              <textarea formControlName="task_remarks" rows="2" placeholder="Any additional notes..."
+                        class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary"></textarea>
+            </div>
+
             <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Duration (minutes)</label>
-              <input formControlName="scheduleDurationMins" type="number" min="15" step="15"
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Estimated Hours</label>
+              <input formControlName="estimated_hours" type="number" step="0.5"
                      class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+              @if (taskForm.get('estimated_hours')?.invalid && taskForm.get('estimated_hours')?.touched) {
+                <p class="text-red-500 text-[10px] mt-1">Required</p>
+              }
+            </div>
+
+            <div>
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Spent Hours</label>
+              <input formControlName="spent_hours" type="number" step="0.5"
+                     class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+              @if (taskForm.get('spent_hours')?.invalid && taskForm.get('spent_hours')?.touched) {
+                <p class="text-red-500 text-[10px] mt-1">Required</p>
+              }
+            </div>
+          </div>
+
+          <!-- Task Artifacts (Add/Edit) -->
+          <div class="space-y-3 pt-4 border-t border-slate-100 dark:border-[#3c3c3c] mt-4">
+            <div class="flex items-center justify-between">
+              <label class="block text-2xs font-bold text-slate-500 uppercase tracking-wider">References & Artifacts</label>
+              <button type="button" (click)="addArtifact()" class="text-xs text-primary font-bold flex items-center gap-1 hover:underline">
+                <span class="material-symbols-outlined text-[16px]">add_circle</span> Add Reference
+              </button>
+            </div>
+
+            <div formArrayName="artifacts" class="space-y-3">
+              @for (art of artifactsArray.controls; track art) {
+                <div [formGroupName]="$index" class="p-3 bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-[#3c3c3c] rounded-xl relative group">
+                  <button type="button" (click)="removeArtifact($index)" class="absolute -top-2 -right-2 w-5 h-5 bg-white dark:bg-[#3c3c3c] border border-slate-200 dark:border-[#4c4c4c] rounded-full text-red-500 hover:text-red-600 shadow-sm flex items-center justify-center transition-transform hover:scale-110">
+                    <span class="material-symbols-outlined text-[14px]">close</span>
+                  </button>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="md:col-span-1">
+                      <input formControlName="artifact_title" type="text" placeholder="Title (e.g. Design Doc)"
+                             class="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                      @if (art.get('artifact_title')?.invalid && art.get('artifact_title')?.touched) {
+                        <p class="text-red-500 text-[10px] mt-0.5">Title required</p>
+                      }
+                    </div>
+                    <div>
+                      <select formControlName="artifact_type" class="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526]">
+                        <option value="url">URL / Link</option>
+                        <option value="credential">Credential / Key</option>
+                        <option value="documentation">Documentation</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div class="md:col-span-2">
+                      <input formControlName="artifact_value" type="text" [placeholder]="art.get('artifact_type')?.value === 'url' ? 'https://...' : 'Reference value'"
+                             class="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] font-mono">
+                      @if (art.get('artifact_value')?.invalid && art.get('artifact_value')?.touched) {
+                        <p class="text-red-500 text-[10px] mt-0.5">Value required</p>
+                      }
+                    </div>
+                    <div class="md:col-span-2 flex items-center gap-3">
+                      <label class="flex items-center gap-2 cursor-pointer group">
+                        <input formControlName="is_sensitive" type="checkbox" class="w-3.5 h-3.5 rounded border-slate-300 text-primary focus:ring-primary/20">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-tight group-hover:text-slate-700 transition-colors">Sensitive Data</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              } @empty {
+                <p class="text-[10px] text-center text-slate-400 py-3 border border-dashed border-slate-200 dark:border-[#3c3c3c] rounded-xl italic">No references added for this task.</p>
+              }
             </div>
           </div>
         </form>
@@ -354,6 +579,147 @@ export interface DayChartBlock {
                 (click)="closeTaskModal()">Cancel</button>
         <button type="button" class="px-3 py-2 text-xs font-semibold bg-primary dark:bg-[#3e3e42] text-white rounded-lg hover:bg-primary/90 dark:hover:bg-[#4a4a4a]"
                 (click)="saveTask()">{{ editingTask() ? 'Save changes' : 'Create task' }}</button>
+      </div>
+    </app-drawer-panel>
+
+    <app-drawer-panel
+      [open]="!!viewingTask()"
+      [title]="'Task details'"
+      subtitle="Detailed overview of the selected task."
+      size="md"
+      (closed)="viewingTask.set(null)"
+      (backdropClose)="viewingTask.set(null)">
+      @if (viewingTask(); as t) {
+        <div class="space-y-6">
+          <div>
+            <h3 class="text-lg font-bold text-slate-900 dark:text-neutral-100 mb-1">{{ t.title }}</h3>
+            <p class="text-xs text-slate-400 font-mono">{{ t.id }}</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6">
+            <div class="space-y-1">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Project</label>
+              <p class="text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ ws.projectName(t.projectId) }}</p>
+            </div>
+            <div class="space-y-1">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Type</label>
+              <p class="text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t.typeLabel }}</p>
+            </div>
+            <div class="space-y-1">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</label>
+              <div><span class="px-2 py-0.5 rounded-md text-2xs font-semibold" [class]="statusClass(t.status)">{{ t.status }}</span></div>
+            </div>
+            <div class="space-y-1">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Priority</label>
+              <div><span class="px-2 py-0.5 rounded-md text-2xs font-semibold" [class]="priorityClass(t.priority)">{{ t.priority }}</span></div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6 p-4 bg-slate-50 dark:bg-white/[0.03] rounded-xl border border-slate-100 dark:border-[#3c3c3c]">
+            <div class="space-y-1">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date Range</label>
+              <p class="text-sm font-medium text-slate-700 dark:text-neutral-200">{{ t.startDate | date:'MMM d, y' }} - {{ t.endDate | date:'MMM d, y' }}</p>
+            </div>
+            <div class="space-y-1">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Time Window</label>
+              <p class="text-sm font-medium text-slate-700 dark:text-neutral-200">{{ t.startTime }} - {{ t.endTime }}</p>
+            </div>
+            <div class="space-y-1">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estimated</label>
+              <p class="text-sm font-medium text-slate-700 dark:text-neutral-200">{{ t.estimated_hours || 0 }} hours</p>
+            </div>
+            <div class="space-y-1">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Spent</label>
+              <p class="text-sm font-medium text-slate-700 dark:text-neutral-200 font-semibold">{{ t.spent_hours || 0 }} hours</p>
+            </div>
+          </div>
+
+          <div class="space-y-1">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Assignees</label>
+            <div class="flex flex-wrap gap-2">
+              <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#2d2d2d] border border-slate-100 dark:border-[#3c3c3c] shadow-sm">
+                <div class="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                  {{ initials(t.assignee) }}
+                </div>
+                <span class="text-xs font-medium text-slate-600 dark:text-neutral-300">{{ t.assignee }}</span>
+              </div>
+            </div>
+          </div>
+
+          @if (t.task_remarks) {
+            <div class="space-y-1">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Remarks</label>
+              <div class="p-4 bg-blue-50/50 dark:bg-white/[0.02] border border-blue-100/50 dark:border-[#3c3c3c] rounded-xl">
+                <p class="text-sm text-slate-600 dark:text-neutral-300 whitespace-pre-wrap leading-relaxed">{{ t.task_remarks }}</p>
+              </div>
+            </div>
+          }
+
+          <!-- Task Artifacts (View) -->
+          @if (t.artifacts && t.artifacts.length) {
+            <div class="space-y-3 pt-2 border-t border-slate-100 dark:border-[#3c3c3c]">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">References & Artifacts</label>
+              <div class="space-y-3">
+                @for (a of t.artifacts; track $index) {
+                  <div class="group relative bg-white dark:bg-[#2d2d2d] border border-slate-100 dark:border-[#3c3c3c] rounded-xl p-4 hover:border-primary/30 transition-all shadow-sm">
+                    <div class="flex items-start justify-between mb-2">
+                      <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px] text-primary/60">
+                          {{ a.artifact_type === 'url' ? 'link' : a.artifact_type === 'credential' ? 'key' : 'description' }}
+                        </span>
+                        <h4 class="text-sm font-bold text-slate-800 dark:text-neutral-200">{{ a.artifact_title }}</h4>
+                      </div>
+                      @if (a.is_sensitive === true || a.is_sensitive === 'true') {
+                        <span class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase">
+                          <span class="material-symbols-outlined text-[12px]">lock</span>
+                          Sensitive
+                        </span>
+                      }
+                    </div>
+                    
+                    <div class="bg-slate-50 dark:bg-black/20 rounded-lg p-2.5 font-mono text-xs break-all border border-slate-100 dark:border-[#3c3c3c]">
+                      @if (a.is_sensitive === true || a.is_sensitive === 'true') {
+                        <div class="flex items-center justify-between">
+                          <span class="text-slate-400 italic">Content hidden for security</span>
+                          <button (click)="copyToClipboard(a.artifact_value)" class="text-primary hover:underline font-bold">Copy</button>
+                        </div>
+                      } @else {
+                        <a *ngIf="a.artifact_type === 'url'" [href]="a.artifact_value" target="_blank" class="text-primary hover:underline">{{ a.artifact_value }}</a>
+                        <span *ngIf="a.artifact_type !== 'url'" class="text-slate-700 dark:text-neutral-300">{{ a.artifact_value }}</span>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
+          <div class="pt-4 border-t border-slate-100 dark:border-[#3c3c3c]">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Audit Info</label>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-2.5 border border-slate-100 dark:border-[#3c3c3c]">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Created By</p>
+                <p class="text-xs text-slate-700 dark:text-neutral-300 font-medium">{{ t.created_by || '—' }}</p>
+              </div>
+              <div class="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-2.5 border border-slate-100 dark:border-[#3c3c3c]">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Created On</p>
+                <p class="text-xs text-slate-700 dark:text-neutral-300 font-medium">{{ t.created_on ? (t.created_on | date:'MMM d, y, h:mm a') : '—' }}</p>
+              </div>
+              <div class="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-2.5 border border-slate-100 dark:border-[#3c3c3c]">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Last Modified By</p>
+                <p class="text-xs text-slate-700 dark:text-neutral-300 font-medium">{{ t.last_modified_by || '—' }}</p>
+              </div>
+              <div class="bg-slate-50 dark:bg-white/[0.03] rounded-lg p-2.5 border border-slate-100 dark:border-[#3c3c3c]">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Last Modified On</p>
+                <p class="text-xs text-slate-700 dark:text-neutral-300 font-medium">{{ t.last_modified_on ? (t.last_modified_on | date:'MMM d, y, h:mm a') : '—' }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+      <div drawerFooter>
+        <button type="button" class="w-full px-3 py-2 text-xs font-bold bg-slate-100 dark:bg-[#3c3c3c] text-slate-600 dark:text-neutral-300 rounded-lg hover:bg-slate-200 dark:hover:bg-[#4a4a4a] transition-colors"
+                (click)="viewingTask.set(null)">Close View</button>
       </div>
     </app-drawer-panel>
 
@@ -367,14 +733,96 @@ export interface DayChartBlock {
   `
 })
 export class TmTasksComponent implements OnInit, OnDestroy {
-  search = '';
-  statusFilter = '';
-  priorityFilter = '';
+  searchFilter = signal('');
+  selectedStatuses = signal<string[]>([]);
+  selectedPriorities = signal<string[]>([]);
+  selectedProjects = signal<string[]>([]);
+  openDropdown = signal<string | null>(null);
+  startDateFilter = signal('');
+  endDateFilter = signal('');
+  pageSize = signal(10);
+  currentPage = signal(1);
+  
   activeTab = signal('All');
-  projectScope = signal('');
+  urlProjectScope = signal('');
   viewMode = signal<'day' | 'list'>('day');
   selectedDay = signal(this.todayYmd());
-  statusTabs = ['All', 'Open', 'In Progress', 'Overdue', 'Completed', 'Triage'];
+  
+  statusTabs = computed(() => {
+    return ['All', ...this.masters.statuses().map(s => s.status_label || s.status_name)];
+  });
+
+  activeProjects = computed(() => {
+    const statuses = this.masters.statuses();
+    if (!statuses.length) return this.ws.projects();
+    const maxOrder = Math.max(...statuses.map(s => s.sort_order || 0));
+    const maxStatus = statuses.find(s => (s.sort_order || 0) === maxOrder);
+    if (!maxStatus) return this.ws.projects();
+    const maxLabel = maxStatus.status_label || maxStatus.status_name;
+    return this.ws.projects().filter(p => p.status !== maxLabel);
+  });
+
+  summaryStats = computed(() => {
+    const all = this.tasksInScope();
+    const stats = [{ label: 'Total', value: all.length }];
+    
+    for (const st of this.masters.statuses()) {
+      const label = st.status_label || st.status_name;
+      stats.push({
+        label,
+        value: all.filter(t => t.status === label).length
+      });
+    }
+    return stats;
+  });
+
+  filteredTasks = computed(() => {
+    return this.tasksInScope().filter(t => {
+      // Tab filter
+      if (this.activeTab() !== 'All' && t.status !== this.activeTab()) return false;
+      
+      // Multi-select status
+      if (this.selectedStatuses().length > 0 && !this.selectedStatuses().includes(t.status)) return false;
+      
+      // Multi-select priority
+      if (this.selectedPriorities().length > 0 && !this.selectedPriorities().includes(t.priority)) return false;
+      
+      // Multi-select project (if not scoped from URL)
+      if (this.selectedProjects().length > 0 && !this.selectedProjects().includes(t.projectId)) return false;
+
+      // Date range
+      if (this.startDateFilter() && t.startDate && t.startDate < this.startDateFilter()) return false;
+      if (this.endDateFilter() && t.endDate && t.endDate > this.endDateFilter()) return false;
+
+      // Search
+      const s = this.searchFilter().toLowerCase();
+      if (s && !t.title.toLowerCase().includes(s) && !t.id.toLowerCase().includes(s)) return false;
+      return true;
+    });
+  });
+
+  paginatedTasks = computed(() => {
+    const start = (this.currentPage() - 1) * this.pageSize();
+    return this.filteredTasks().slice(start, start + this.pageSize());
+  });
+
+  totalPages = computed(() => Math.ceil(this.filteredTasks().length / this.pageSize()));
+  startIndex = computed(() => (this.currentPage() - 1) * this.pageSize());
+  endIndex = computed(() => Math.min(this.startIndex() + this.pageSize(), this.filteredTasks().length));
+
+  pages = computed(() => {
+    const total = this.totalPages();
+    const current = this.currentPage();
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const res: (number | string)[] = [1];
+    if (current > 4) res.push('...');
+    const start = Math.max(2, current - 2);
+    const end = Math.min(total - 1, current + 2);
+    for (let i = start; i <= end; i++) res.push(i);
+    if (current < total - 3) res.push('...');
+    res.push(total);
+    return res;
+  });
 
   /** 0–23 → full 24h; row height keeps chart scrollable inside the panel */
   readonly hourLabels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
@@ -382,30 +830,42 @@ export class TmTasksComponent implements OnInit, OnDestroy {
 
   taskModalOpen = signal(false);
   editingTask = signal<TmTaskRow | null>(null);
+  viewingTask = signal<TmTaskRow | null>(null);
   deleteTarget = signal<TmTaskRow | null>(null);
 
+  selectedAssigneeIds = signal<string[]>([]);
+
   taskForm = this.fb.group({
-    title: ['', Validators.required],
-    projectId: ['', Validators.required],
-    status: ['Open', Validators.required],
-    priority: ['Medium', Validators.required],
-    assignee: ['', Validators.required],
-    due: [''],
-    dueDate: ['', Validators.required],
-    scheduleTime: ['10:00', Validators.required],
-    scheduleDurationMins: [45, [Validators.required, Validators.min(15), Validators.max(12 * 60)]],
-  });
+    task_title: ['', Validators.required],
+    project_id_fk: ['', Validators.required],
+    task_status_id: ['', Validators.required],
+    priority_id: ['', Validators.required],
+    type_id: ['T001', Validators.required],
+    task_remarks: [''],
+    task_start_date: ['', Validators.required],
+    task_end_date: ['', Validators.required],
+    task_start_time: ['00:00', Validators.required],
+    task_end_time: ['00:30', Validators.required],
+    estimated_hours: [0, [Validators.required, Validators.min(0)]],
+    spent_hours: [0, [Validators.required, Validators.min(0)]],
+    artifacts: this.fb.array([])
+  }, { validators: dateTimeRangeValidator });
 
   private sub?: Subscription;
 
   constructor(
     public ws: TaskWorkspaceService,
+    public masters: MastersService,
     private fb: FormBuilder,
     private route: ActivatedRoute,
     private router: Router,
+    private toast: ToastService
   ) {}
 
   ngOnInit() {
+    this.masters.reload();
+    this.ws.loadAll();
+
     if (!this.route.snapshot.queryParamMap.has('view')) {
       this.router.navigate([], {
         relativeTo: this.route,
@@ -417,7 +877,7 @@ export class TmTasksComponent implements OnInit, OnDestroy {
     this.sub = this.route.queryParamMap.subscribe(q => {
       const p = q.get('project') ?? '';
       const valid = p && this.ws.projects().some(x => x.id === p);
-      this.projectScope.set(valid ? p : '');
+      this.urlProjectScope.set(valid ? p : '');
       const v = q.get('view');
       this.viewMode.set(v === 'list' ? 'list' : 'day');
     });
@@ -500,7 +960,8 @@ export class TmTasksComponent implements OnInit, OnDestroy {
 
   timelineCardBorder(priority: string): string {
     const map: Record<string, string> = {
-      High: 'border-l-4 border-l-rose-500 dark:border-l-rose-400',
+      'Very High': 'border-l-4 border-l-rose-600 dark:border-l-rose-500',
+      High: 'border-l-4 border-l-rose-400 dark:border-l-rose-400',
       Medium: 'border-l-4 border-l-amber-500 dark:border-l-amber-400',
       Low: 'border-l-4 border-l-emerald-500 dark:border-l-emerald-500',
     };
@@ -508,26 +969,90 @@ export class TmTasksComponent implements OnInit, OnDestroy {
   }
 
   scopedProject() {
-    const id = this.projectScope();
+    const id = this.urlProjectScope();
     if (!id) return null;
     return this.ws.projectById(id) ?? null;
   }
 
   tasksInScope(): TmTaskRow[] {
-    const id = this.projectScope();
+    const id = this.urlProjectScope();
     const all = this.ws.tasks();
     return id ? all.filter(t => t.projectId === id) : all;
   }
 
-  /** List view filters */
-  filtered(): TmTaskRow[] {
-    return this.tasksInScope().filter(t => {
-      if (this.activeTab() !== 'All' && t.status !== this.activeTab()) return false;
-      if (this.statusFilter && t.status !== this.statusFilter) return false;
-      if (this.priorityFilter && t.priority !== this.priorityFilter) return false;
-      if (this.search && !t.title.toLowerCase().includes(this.search.toLowerCase()) && !t.id.toLowerCase().includes(this.search.toLowerCase())) return false;
-      return true;
-    });
+  clearFilters() {
+    this.searchFilter.set('');
+    this.selectedStatuses.set([]);
+    this.selectedPriorities.set([]);
+    this.selectedProjects.set([]);
+    this.startDateFilter.set('');
+    this.endDateFilter.set('');
+    this.activeTab.set('All');
+    this.router.navigate([], { relativeTo: this.route, queryParams: { project: null }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
+
+  toggleStatus(val: string) {
+    const cur = this.selectedStatuses();
+    this.selectedStatuses.set(cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val]);
+  }
+
+  togglePriority(val: string) {
+    const cur = this.selectedPriorities();
+    this.selectedPriorities.set(cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val]);
+  }
+
+  toggleProject(val: string) {
+    const cur = this.selectedProjects();
+    this.selectedProjects.set(cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val]);
+  }
+
+  toggleDropdown(ev: MouseEvent, name: string) {
+    ev.stopPropagation();
+    this.openDropdown.set(this.openDropdown() === name ? null : name);
+  }
+
+  viewTask(t: TmTaskRow) {
+    this.viewingTask.set(t);
+  }
+
+  get artifactsArray() {
+    return this.taskForm.get('artifacts') as FormArray;
+  }
+
+  addArtifact() {
+    this.artifactsArray.push(this.fb.group({
+      artifact_title: ['', Validators.required],
+      artifact_value: ['', Validators.required],
+      artifact_type: ['url', Validators.required],
+      description: [''],
+      is_sensitive: [false]
+    }));
+  }
+
+  removeArtifact(index: number) {
+    this.artifactsArray.removeAt(index);
+  }
+
+  copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text);
+    this.toast.success('Copied to clipboard');
+  }
+
+  setPageSize(size: any) {
+    this.pageSize.set(Number(size));
+    this.currentPage.set(1);
+  }
+
+  setPage(p: any) {
+    if (typeof p === 'number') this.currentPage.set(p);
+  }
+
+  prevPage() {
+    if (this.currentPage() > 1) this.currentPage.update(c => c - 1);
+  }
+
+  nextPage() {
+    if (this.currentPage() < this.totalPages()) this.currentPage.update(c => c + 1);
   }
 
   /** Day chart: same day + scope + search only (status tabs apply) */
@@ -535,7 +1060,8 @@ export class TmTasksComponent implements OnInit, OnDestroy {
     const day = this.selectedDay();
     return this.tasksInScope().filter(t => {
       if (!t.dueDate || t.dueDate !== day) return false;
-      if (this.search && !t.title.toLowerCase().includes(this.search.toLowerCase()) && !t.id.toLowerCase().includes(this.search.toLowerCase())) return false;
+      const s = this.searchFilter().toLowerCase();
+      if (s && !t.title.toLowerCase().includes(s) && !t.id.toLowerCase().includes(s)) return false;
       return true;
     });
   }
@@ -600,8 +1126,18 @@ export class TmTasksComponent implements OnInit, OnDestroy {
     }
   }
 
+  toggleAssignee(userId: string) {
+    const current = this.selectedAssigneeIds();
+    if (current.includes(userId)) {
+      this.selectedAssigneeIds.set(current.filter(id => id !== userId));
+    } else {
+      this.selectedAssigneeIds.set([...current, userId]);
+    }
+  }
+
   initials(name: string): string {
-    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    if (!name) return '??';
+    return name.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase();
   }
 
   statusClass(s: string): string {
@@ -616,41 +1152,81 @@ export class TmTasksComponent implements OnInit, OnDestroy {
   }
 
   priorityClass(p: string): string {
-    return { High: 'bg-red-100 text-red-700 dark:bg-red-900/35 dark:text-red-200', Medium: 'bg-amber-100 text-amber-800 dark:bg-amber-900/35 dark:text-amber-200',
-             Low: 'bg-slate-100 text-slate-600 dark:bg-zinc-700 dark:text-zinc-200' }[p] ?? 'bg-slate-100 text-slate-500';
+    return { 
+      'Very High': 'bg-rose-100 text-rose-700 dark:bg-rose-900/35 dark:text-rose-200',
+      High: 'bg-red-100 text-red-700 dark:bg-red-900/35 dark:text-red-200', 
+      Medium: 'bg-amber-100 text-amber-800 dark:bg-amber-900/35 dark:text-amber-200',
+      Low: 'bg-slate-100 text-slate-600 dark:bg-zinc-700 dark:text-zinc-200' 
+    }[p] ?? 'bg-slate-100 text-slate-500';
   }
 
   toggleDone(task: TmTaskRow, done: boolean): void {
-    this.ws.updateTask(task.id, { status: done ? 'Completed' : 'Open' });
+    const targetLabel = done ? 'Completed' : 'Open';
+    const status = this.masters.statuses().find(s => (s.status_label || s.status_name) === targetLabel);
+    if (status) {
+      this.ws.updateTask(task.id, { task_status_id: status.status_id });
+    } else {
+      // Fallback if masters not loaded or label mismatch
+      this.ws.updateTask(task.id, { task_status_id: done ? 'S003' : 'S001' }); 
+    }
   }
 
   openTaskModal(row: TmTaskRow | null) {
     this.editingTask.set(row);
-    const defaultProject = this.projectScope() || this.ws.projects()[0]?.id || '';
+    const defaultProject = this.urlProjectScope() || this.ws.projects()[0]?.id || '';
     const today = this.todayYmd();
+    
     if (row) {
+      this.selectedAssigneeIds.set(row.assigneeIds || []);
+
+      // Clear and reset form FIRST (with empty artifacts)
+      this.artifactsArray.clear();
       this.taskForm.reset({
-        title: row.title,
-        projectId: row.projectId,
-        status: row.status,
-        priority: row.priority,
-        assignee: row.assignee,
-        due: row.due,
-        dueDate: row.dueDate || today,
-        scheduleTime: this.minsToTime(row.scheduleStartMins),
-        scheduleDurationMins: row.scheduleDurationMins,
+        task_title: row.title,
+        project_id_fk: row.projectId,
+        task_status_id: row.statusId,
+        priority_id: row.priorityId,
+        type_id: row.typeId || 'T001',
+        task_remarks: row.task_remarks || '',
+        task_start_date: row.startDate || today,
+        task_end_date: row.endDate || today,
+        task_start_time: row.startTime,
+        task_end_time: row.endTime,
+        estimated_hours: row.estimated_hours || 0,
+        spent_hours: row.spent_hours || 0,
       });
+
+      // Populate artifacts AFTER reset so reset does not clear their values
+      if (row.artifacts && row.artifacts.length) {
+        row.artifacts.forEach((a: any) => {
+          this.artifactsArray.push(this.fb.group({
+            artifact_title: [a.artifact_title, Validators.required],
+            artifact_value: [a.artifact_value, Validators.required],
+            artifact_type: [a.artifact_type || 'url', Validators.required],
+            description: [a.description || ''],
+            is_sensitive: [a.is_sensitive === true || a.is_sensitive === 'true']
+          }));
+        });
+      }
     } else {
+      this.selectedAssigneeIds.set([]);
+      this.artifactsArray.clear();
+      const firstStatus = this.masters.statuses()[0]?.status_id || '';
+      const firstPriority = this.masters.priorities()[0]?.priority_id || '';
       this.taskForm.reset({
-        title: '',
-        projectId: defaultProject,
-        status: 'Open',
-        priority: 'Medium',
-        assignee: '',
-        due: this.formatDueShort(today),
-        dueDate: today,
-        scheduleTime: '10:00',
-        scheduleDurationMins: 45,
+        task_title: '',
+        project_id_fk: defaultProject,
+        task_status_id: firstStatus,
+        priority_id: firstPriority,
+        type_id: 'T001',
+        task_remarks: '',
+        task_start_date: today,
+        task_end_date: today,
+        task_start_time: '00:00',
+        task_end_time: '00:30',
+        estimated_hours: 0,
+        spent_hours: 0,
+        artifacts: []
       });
     }
     this.taskModalOpen.set(true);
@@ -661,37 +1237,61 @@ export class TmTasksComponent implements OnInit, OnDestroy {
     this.editingTask.set(null);
   }
 
-  saveTask() {
+  async saveTask() {
     this.taskForm.markAllAsTouched();
-    if (this.taskForm.invalid) return;
+    if (this.taskForm.invalid) {
+      console.warn('Form Invalid:', this.getFormErrors());
+      this.toast.error('Please fix the errors in the form');
+      return;
+    }
+    
+    if (this.selectedAssigneeIds().length === 0) {
+      this.toast.error('Please select at least one assignee');
+      return;
+    }
+    
     const v = this.taskForm.getRawValue();
     const cur = this.editingTask();
-    const dueDate = v.dueDate || '';
-    const due = v.due?.trim() || (dueDate ? this.formatDueShort(dueDate) : '');
-    const scheduleStartMins = this.timeToMins(v.scheduleTime || '10:00');
-    const scheduleDurationMins = Number(v.scheduleDurationMins) || 45;
-    const payload = {
-      title: v.title!,
-      projectId: v.projectId!,
-      status: v.status!,
-      priority: v.priority!,
-      assignee: v.assignee!,
-      due,
-      dueDate,
-      scheduleStartMins,
-      scheduleDurationMins,
-    };
-    if (cur) {
-      this.ws.updateTask(cur.id, payload);
-    } else {
-      this.ws.addTask(payload);
+    
+    try {
+      const payload = {
+        ...v,
+        task_assignees: this.selectedAssigneeIds().join('|')
+      };
+
+      if (cur) {
+        await this.ws.updateTask(cur.id, payload);
+        this.toast.success('Task updated');
+      } else {
+        await this.ws.addTask(payload);
+        this.toast.success('Task created');
+      }
+      this.closeTaskModal();
+    } catch (err: any) {
+      this.toast.error(err.message || 'Failed to save task');
     }
-    this.closeTaskModal();
   }
 
-  confirmDeleteTask() {
+  private getFormErrors() {
+    const errors: any = {};
+    Object.keys(this.taskForm.controls).forEach(key => {
+      const controlErrors = this.taskForm.get(key)?.errors;
+      if (controlErrors) errors[key] = controlErrors;
+    });
+    return errors;
+  }
+
+  async confirmDeleteTask() {
     const t = this.deleteTarget();
-    if (t) this.ws.deleteTask(t.id);
-    this.deleteTarget.set(null);
+    if (!t) return;
+    
+    try {
+      await this.ws.deleteTask(t.id);
+      this.toast.success('Task deleted');
+    } catch (err: any) {
+      this.toast.error(err.message || 'Failed to delete task');
+    } finally {
+      this.deleteTarget.set(null);
+    }
   }
 }

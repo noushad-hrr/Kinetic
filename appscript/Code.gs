@@ -185,7 +185,8 @@ function sheetToObjects(sheetName) {
     headers.forEach(function(h, i) {
       var val = row[i];
       if (val instanceof Date) {
-        obj[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        var format = (h.indexOf('_time') !== -1) ? 'HH:mm' : 'yyyy-MM-dd';
+        obj[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), format);
       } else {
         obj[h] = val === '' || val === null || val === undefined ? null : val;
       }
@@ -800,7 +801,7 @@ function handleGetMasters() {
     return { user_id: u.user_id, display_name: u.display_name, username: u.username, email: u.email };
   });
 
-  return success({ statuses: statuses, priorities: priorities, taskTypes: taskTypes, roles: roles, users: users });
+  return success({ statuses: statuses, priorities: priorities, task_types: taskTypes, roles: roles, users: users });
 }
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
@@ -1011,11 +1012,20 @@ function handleUpdateProject(body) {
 // Helper: Sync project artifacts (delete and re-insert)
 function saveProjectArtifacts(projectId, artifacts, userId) {
   deleteRowsWhere('tasks_manager_project_artifacts', 'tasks_manager_project_artifacts_id_fk', projectId);
+  // Also try deleting by legacy name just in case
+  deleteRowsWhere('tasks_manager_project_artifacts', 'project_id_fk', projectId);
+  
   if (artifacts && Array.isArray(artifacts)) {
     artifacts.forEach(function(a) {
+      var newId = generateId('PA', 'tasks_manager_project_artifacts', 'tasks_manager_project_artifacts_id');
       var artifact = {
-        tasks_manager_project_artifacts_id: generateId('PA', 'tasks_manager_project_artifacts', 'tasks_manager_project_artifacts_id'),
+        // Current names
+        tasks_manager_project_artifacts_id: newId,
         tasks_manager_project_artifacts_id_fk: projectId,
+        // Legacy names (for backward compatibility if sheet headers weren't updated)
+        project_artifact_id: newId,
+        project_id_fk: projectId,
+        
         artifact_title: a.artifact_title,
         artifact_value: a.artifact_value,
         artifact_type: a.artifact_type,
@@ -1136,105 +1146,140 @@ function handleDeleteTaskArtifact(artifactId) {
   return success({ message: 'Artifact deleted' });
 }
 
+// Helper: Sync task artifacts (delete and re-insert)
+function saveTaskArtifacts(taskId, artifacts, userId) {
+  deleteRowsWhere('tasks_manager_task_artifacts', 'task_id_fk', taskId);
+  
+  if (artifacts && Array.isArray(artifacts)) {
+    artifacts.forEach(function(a) {
+      var newId = generateId('TA', 'tasks_manager_task_artifacts', 'task_artifact_id');
+      var artifact = {
+        task_artifact_id: newId,
+        task_id_fk: taskId,
+        artifact_title: a.artifact_title,
+        artifact_value: a.artifact_value,
+        artifact_type: a.artifact_type,
+        description: a.description || '',
+        is_sensitive: a.is_sensitive === true || a.is_sensitive === 'true',
+        created_by: userId || a.created_by || '',
+        created_on: now()
+      };
+      appendRow('tasks_manager_task_artifacts', artifact);
+    });
+  }
+}
+
 // ─── TASKS ───────────────────────────────────────────────────────────────────
 
-function handleGetTasks(userId, projectIdsParam) {
+function handleGetTasks(userId, projectId) {
   if (!userId) return error('user_id required', 400);
 
-  // Check if user can view all projects
   var viewAll = canViewAllProjects(userId);
-
   var userProjects = getUserProjectsData(userId, 'TASKS');
   var accessibleIds = userProjects.map(function(p) { return p.project_id_fk; });
 
-  var filterIds = viewAll ? null : accessibleIds;
-  if (projectIdsParam) {
-    var requestedIds = String(projectIdsParam).split(',').map(function(s) { return s.trim(); });
-    filterIds = requestedIds.filter(function(id) { 
-      return viewAll || accessibleIds.indexOf(id) !== -1; 
+  var allTasks = sheetToObjects('tasks_manager_tasks');
+  var tasks = allTasks;
+
+  // Filter by project if requested
+  if (projectId) {
+    tasks = tasks.filter(function(t) { return String(t.project_id_fk) === String(projectId); });
+  }
+
+  // Filter by permissions if not admin/view-all
+  if (!viewAll) {
+    tasks = tasks.filter(function(t) {
+      return accessibleIds.indexOf(String(t.project_id_fk)) !== -1;
     });
   }
 
-  var allTasks = sheetToObjects('tasks_manager_tasks');
-  var tasks = filterIds ? allTasks.filter(function(t) {
-    return filterIds.indexOf(String(t.project_id_fk)) !== -1;
-  }) : allTasks;
+  var projects = sheetToObjects('tasks_manager_projects');
+  var statuses = sheetToObjects('status_master');
+  var priorities = sheetToObjects('priority_master');
+  var types = sheetToObjects('task_type_master');
+  var users = sheetToObjects('users');
+  var allArtifacts = sheetToObjects('tasks_manager_task_artifacts');
 
-  return success(tasks);
+  var result = tasks.map(function(t) {
+    var p = projects.find(function(item) { return String(item.project_id) === String(t.project_id_fk); });
+    var s = statuses.find(function(item) { return String(item.status_id) === String(t.task_status_id); });
+    var pr = priorities.find(function(item) { return String(item.priority_id) === String(t.priority_id); });
+    var ty = types.find(function(item) { return String(item.type_id) === String(t.type_id); });
+    
+    // Support multi-assignees (pipe-separated user IDs)
+    var assigneeIds = String(t.task_assignees || '').split('|').filter(Boolean);
+    var assigneeNames = assigneeIds.map(function(uid) {
+      var u = users.find(function(user) { return String(user.user_id) === uid; });
+      return u ? (u.display_name || u.username) : uid;
+    }).join(', ');
+
+    return Object.assign({}, t, {
+      task_start_date: t.task_start_date instanceof Date ? Utilities.formatDate(t.task_start_date, Session.getScriptTimeZone(), 'yyyy-MM-dd') : t.task_start_date,
+      task_end_date: t.task_end_date instanceof Date ? Utilities.formatDate(t.task_end_date, Session.getScriptTimeZone(), 'yyyy-MM-dd') : t.task_end_date,
+      task_start_time: t.task_start_time instanceof Date ? Utilities.formatDate(t.task_start_time, Session.getScriptTimeZone(), 'HH:mm') : t.task_start_time,
+      task_end_time: t.task_end_time instanceof Date ? Utilities.formatDate(t.task_end_time, Session.getScriptTimeZone(), 'HH:mm') : t.task_end_time,
+      project_name: p ? p.project_name : 'Unknown',
+      status_label: s ? (s.status_label || s.status_name) : 'Unknown',
+      priority_label: pr ? (pr.priority_label || pr.priority_name) : 'Medium',
+      type_label: ty ? (ty.type_label || ty.type_name) : 'Task',
+      assignee_names: assigneeNames,
+      // Compatibility for frontend models that expect labels in status/priority fields
+      status: s ? (s.status_label || s.status_name) : 'Unknown',
+      priority: pr ? (pr.priority_label || pr.priority_name) : 'Medium',
+      artifacts: allArtifacts.filter(function(a) { return String(a.task_id_fk) === String(t.task_id); })
+    });
+  });
+
+  return success(result);
 }
 
 function handleCreateTask(body) {
-  if (!body.project_id_fk || !body.task_title || !body.task_status) {
-    return error('project_id_fk, task_title, task_status are required', 400);
-  }
-  if (body.task_status !== 'triage') {
-    if (!body.task_remarks) return error('task_remarks is required when status is not triage', 400);
-    if (!body.task_assignees) return error('task_assignees is required when status is not triage', 400);
+  if (!body.project_id_fk || !body.task_title || !body.task_status_id) {
+    return error('project_id_fk, task_title, and task_status_id are required', 400);
   }
 
-  var newId = generateId('KT-', 'tasks_manager_tasks', 'task_id');
-  var task = {
-    task_id: newId,
+  var newTask = {
+    task_id: generateId('KT-', 'tasks_manager_tasks', 'task_id'),
     project_id_fk: body.project_id_fk,
     task_title: body.task_title,
     task_remarks: body.task_remarks || '',
-    task_status: body.task_status,
+    task_status_id: body.task_status_id,
     task_assignees: Array.isArray(body.task_assignees) ? body.task_assignees.join('|') : (body.task_assignees || ''),
     task_start_date: body.task_start_date || '',
     task_end_date: body.task_end_date || '',
     task_start_time: body.task_start_time || '',
     task_end_time: body.task_end_time || '',
-    task_order_id: getNextTaskOrderId(),
-    type_id: body.type_id || '',
-    priority_id: body.priority_id || '',
-    estimated_hours: body.estimated_hours || '',
-    spent_hours: body.spent_hours || '',
+    task_order_id: body.task_order_id || (sheetToObjects('tasks_manager_tasks').length + 1),
+    type_id: body.type_id || 'T001',
+    priority_id: body.priority_id || 'P003',
+    estimated_hours: body.estimated_hours || 0,
+    spent_hours: body.spent_hours || 0,
     created_by: body.created_by,
     created_on: now(),
     last_modified_by: body.created_by,
     last_modified_on: now()
   };
 
-  // Auto-close check
-  if (task.task_end_date && task.task_end_date < now() && task.task_status !== 'completed') {
-    task.task_status = 'closed';
+  appendRow('tasks_manager_tasks', newTask);
+
+  if (body.artifacts) {
+    saveTaskArtifacts(newTask.task_id, body.artifacts, body.created_by);
   }
 
-  appendRow('tasks_manager_tasks', task);
-  return success(task);
+  return success(newTask);
 }
 
 function handleUpdateTask(body) {
   if (!body.task_id) return error('task_id required', 400);
-  if (body.task_status && body.task_status !== 'triage') {
-    if (body.hasOwnProperty('task_remarks') && !body.task_remarks) {
-      return error('task_remarks is required when status is not triage', 400);
-    }
-    if (body.hasOwnProperty('task_assignees') && !body.task_assignees) {
-      return error('task_assignees is required when status is not triage', 400);
-    }
-  }
-
-  if (Array.isArray(body.task_assignees)) {
-    body.task_assignees = body.task_assignees.join('|');
-  }
-
-  // Handle order_id change: reorder other tasks to maintain gap-free sequence
-  if (body.task_order_id !== undefined && body.task_order_id !== null && body.task_order_id !== '') {
-    var newOrder = parseInt(body.task_order_id, 10);
-    if (!isNaN(newOrder) && newOrder >= 1) {
-      reorderTask(body.task_id, newOrder);
-    }
-  }
-
-  // Auto-close check
-  if (body.task_end_date && body.task_end_date < now() && body.task_status !== 'completed') {
-    body.task_status = 'closed';
-  }
-
+  
   body.last_modified_on = now();
   var updated = updateRowById('tasks_manager_tasks', 'task_id', body.task_id, body);
   if (!updated) return error('Task not found', 404);
+
+  if (body.artifacts) {
+    saveTaskArtifacts(body.task_id, body.artifacts, body.last_modified_by);
+  }
+
   return success({ message: 'Task updated' });
 }
 
@@ -1249,7 +1294,7 @@ function handleDeleteTask(taskId) {
   var deleted = deleteRowById('tasks_manager_tasks', 'task_id', taskId);
   if (!deleted) return error('Task not found', 404);
 
-  // Cascade: delete task artifacts
+  // Cascade delete task artifacts
   deleteRowsWhere('tasks_manager_task_artifacts', 'task_id_fk', taskId);
 
   // Close the gap in the order sequence

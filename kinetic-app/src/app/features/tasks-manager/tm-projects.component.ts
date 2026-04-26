@@ -1,14 +1,22 @@
 import { Component, computed, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule, ReactiveFormsModule, FormBuilder, Validators, FormArray } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { FormsModule, ReactiveFormsModule, FormBuilder, Validators, FormArray, AbstractControl, ValidationErrors } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { Project, ProjectArtifact } from '../../models';
 import { MastersService } from '../../services/masters.service';
 import { ToastService } from '../../services/toast.service';
+import { TaskWorkspaceService } from '../../services/task-workspace.service';
 import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.component';
 import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialog.component';
+
+function projectDateRangeValidator(group: AbstractControl): ValidationErrors | null {
+  const start = group.get('project_start_date')?.value;
+  const end   = group.get('project_end_date')?.value;
+  if (start && end && start > end) return { dateRangeInvalid: true };
+  return null;
+}
 
 @Component({
   selector: 'app-tm-projects',
@@ -80,7 +88,7 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
       <div *ngIf="showIntro()" class="flex justify-end animate-fade-in -mt-2">
         <div class="bg-blue-50/80 border border-blue-100 rounded px-3 py-2">
           <p class="text-xs text-blue-600">
-            Progress and task counts stay in sync when you add or complete tasks. Open <span class="font-medium text-blue-700">Tasks</span> for the selected project.
+            1. Only the projects with status not equal max sort order will visible in dropdows with its status. <br> 2.
           </p>
         </div>
       </div>
@@ -95,12 +103,13 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
               <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Progress</th>
               <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 uppercase tracking-wider hidden lg:table-cell">Start</th>
               <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 uppercase tracking-wider hidden lg:table-cell">Due</th>
+              <th class="text-center px-3 py-2.5 text-2xs font-semibold text-slate-500 uppercase tracking-wider hidden lg:table-cell">Sources</th>
               <th class="text-right px-3 py-2.5 text-2xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody>
             @if (loading()) {
-              <tr><td colspan="7" class="px-3 py-12 text-center text-slate-400 text-xs">Loading projects...</td></tr>
+              <tr><td colspan="8" class="px-3 py-12 text-center text-slate-400 text-xs">Loading projects...</td></tr>
             } @else {
               @for (p of paginatedProjects(); track p.project_id) {
                 <tr class="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
@@ -111,7 +120,7 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
                   <td class="px-3 py-2.5">
                     <span class="px-2 py-0.5 rounded-md text-2xs font-semibold" [class]="statusClass(p.project_status)">{{ p.project_status }}</span>
                   </td>
-                  <td class="px-3 py-2.5 hidden sm:table-cell tabular-nums text-slate-700 font-medium">{{ p.task_done || 0 }}/{{ p.task_total || 0 }}</td>
+                  <td class="px-3 py-2.5 hidden sm:table-cell tabular-nums text-slate-700 font-medium">{{ pendingTasks(p.project_id) }} Pending / {{ totalTasks(p.project_id) }}</td>
                   <td class="px-3 py-2.5 hidden md:table-cell">
                     <div class="flex items-center gap-2">
                       <div class="h-1.5 w-20 bg-slate-100 rounded-full overflow-hidden">
@@ -122,6 +131,16 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
                   </td>
                   <td class="px-3 py-2.5 text-slate-500 hidden lg:table-cell">{{ p.project_start_date || '—' }}</td>
                   <td class="px-3 py-2.5 text-slate-500 hidden lg:table-cell">{{ p.project_end_date || '—' }}</td>
+                  <td class="px-3 py-2.5 text-center hidden lg:table-cell">
+                    @if ((p.artifacts?.length || 0) > 0) {
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-semibold bg-primary/10 text-primary">
+                        <span class="material-symbols-outlined text-[12px]">link</span>
+                        {{ p.artifacts?.length }}
+                      </span>
+                    } @else {
+                      <span class="text-slate-300 text-2xs">—</span>
+                    }
+                  </td>
                   <td class="px-3 py-2.5 text-right">
                     <div class="flex items-center justify-end gap-0.5 flex-wrap">
                       <a [routerLink]="['/tasks-manager/tasks']" [queryParams]="{ project: p.project_id, view: 'day' }"
@@ -145,7 +164,7 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="7" class="px-3 py-12 text-center text-slate-400 text-xs">No projects match your filters.</td></tr>
+                <tr><td colspan="8" class="px-3 py-12 text-center text-slate-400 text-xs">No projects match your filters.</td></tr>
               }
             }
           </tbody>
@@ -239,6 +258,7 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
              <div>
                <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Start <span class="text-red-500">*</span></label>
                <input formControlName="project_start_date" type="date"
+                      [class.border-red-400]="projectForm.errors?.['dateRangeInvalid'] && projectForm.touched"
                       class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
                @if (projectForm.get('project_start_date')?.invalid && projectForm.get('project_start_date')?.touched) {
                  <p class="text-red-600 text-2xs mt-1">Start date is required</p>
@@ -247,9 +267,13 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
              <div>
                <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Due <span class="text-red-500">*</span></label>
                <input formControlName="project_end_date" type="date"
+                      [class.border-red-400]="projectForm.errors?.['dateRangeInvalid'] && projectForm.touched"
                       class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
                @if (projectForm.get('project_end_date')?.invalid && projectForm.get('project_end_date')?.touched) {
                  <p class="text-red-600 text-2xs mt-1">Due date is required</p>
+               }
+               @if (projectForm.errors?.['dateRangeInvalid'] && projectForm.touched) {
+                 <p class="text-red-600 text-2xs mt-1">Due date cannot be before start date</p>
                }
              </div>
            </div>
@@ -371,6 +395,19 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
             </div>
           </div>
 
+          <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase">Progress</label>
+              <span class="text-xs font-semibold text-slate-700 tabular-nums">{{ pendingTasks(p.project_id) }} Pending / {{ totalTasks(p.project_id) }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                <div class="h-full bg-primary rounded-full transition-all" [style.width.%]="progressPct(p)"></div>
+              </div>
+              <span class="text-[11px] font-semibold text-slate-500 tabular-nums w-8 text-right">{{ progressPct(p) }}%</span>
+            </div>
+          </div>
+
           <div>
             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Description</label>
             <div class="bg-white border border-slate-100 rounded-xl p-3 text-sm text-slate-600 leading-relaxed min-h-[80px]">
@@ -425,6 +462,28 @@ import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialo
               }
             </div>
           </div>
+
+          <div class="pt-4 border-t border-slate-100">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Audit Info</label>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="bg-slate-50 rounded-lg p-2.5 border border-slate-100">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Created By</p>
+                <p class="text-xs text-slate-700 font-medium">{{ p.created_by || '—' }}</p>
+              </div>
+              <div class="bg-slate-50 rounded-lg p-2.5 border border-slate-100">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Created On</p>
+                <p class="text-xs text-slate-700 font-medium">{{ p.created_on ? (p.created_on | date:'MMM d, y, h:mm a') : '—' }}</p>
+              </div>
+              <div class="bg-slate-50 rounded-lg p-2.5 border border-slate-100">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Last Modified By</p>
+                <p class="text-xs text-slate-700 font-medium">{{ p.last_modified_by || '—' }}</p>
+              </div>
+              <div class="bg-slate-50 rounded-lg p-2.5 border border-slate-100">
+                <p class="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Last Modified On</p>
+                <p class="text-xs text-slate-700 font-medium">{{ p.last_modified_on ? (p.last_modified_on | date:'MMM d, y, h:mm a') : '—' }}</p>
+              </div>
+            </div>
+          </div>
         </div>
       }
       <ng-container drawerFooter>
@@ -462,19 +521,19 @@ export class TmProjectsComponent implements OnInit {
     project_start_date: ['', Validators.required],
     project_end_date: ['', Validators.required],
     artifacts: this.fb.array([])
-  });
+  }, { validators: projectDateRangeValidator });
 
   constructor(
     private fb: FormBuilder,
-    private router: Router,
     private api: ApiService,
     private auth: AuthService,
     public masters: MastersService,
-    private toast: ToastService
+    private toast: ToastService,
+    public ws: TaskWorkspaceService
   ) { }
 
   ngOnInit() {
-    this.masters.load();
+    this.masters.reload();
     this.fetchProjects();
   }
 
@@ -624,9 +683,19 @@ export class TmProjectsComponent implements OnInit {
     return p;
   });
 
+  pendingTasks(projectId: string): number {
+    return this.ws.tasks().filter(t => t.projectId === projectId && t.status !== 'Completed').length;
+  }
+
+  totalTasks(projectId: string): number {
+    return this.ws.tasks().filter(t => t.projectId === projectId).length;
+  }
+
   progressPct(p: Project): number {
-    if (!p.task_total) return 0;
-    return Math.min(100, Math.round((p.task_done! / p.task_total) * 100));
+    const total = this.totalTasks(p.project_id);
+    if (!total) return 0;
+    const done = total - this.pendingTasks(p.project_id);
+    return Math.min(100, Math.round((done / total) * 100));
   }
 
   statusClass(s?: string): string {
@@ -766,7 +835,7 @@ export class TmProjectsComponent implements OnInit {
       };
 
       this.api.createProject(newProj).subscribe({
-        next: (p) => {
+        next: () => {
           this.fetchProjects();
           this.closeProjectModal();
           this.saving.set(false);
