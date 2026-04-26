@@ -307,8 +307,17 @@ function ensureTaskPeriodicityIds() {
   }
 }
 
+/** Boolean for tasks_manager_tasks_periodicty.is_include_in_timesheet (checkbox column). */
+function coerceBooleanTimesheetFlag(v, defaultWhenEmpty) {
+  var d = defaultWhenEmpty !== undefined ? defaultWhenEmpty : true;
+  if (v === true || v === 'TRUE' || v === 'true' || v === 1 || v === '1') return true;
+  if (v === false || v === 'FALSE' || v === 'false' || v === 0 || v === '0') return false;
+  if (v === '' || v === null || v === undefined) return d;
+  return !!v;
+}
+
 function periodicityPatchKeys() {
-  return ['task_remarks', 'task_status_id', 'task_date', 'task_start_time', 'task_end_time', 'task_order_id', 'estimated_hours', 'spent_hours', 'last_modified_by', 'last_modified_on'];
+  return ['task_remarks', 'task_status_id', 'task_date', 'task_start_time', 'task_end_time', 'task_order_id', 'estimated_hours', 'spent_hours', 'is_include_in_timesheet', 'last_modified_by', 'last_modified_on'];
 }
 
 function pickPeriodicityPatch(obj) {
@@ -353,6 +362,9 @@ function syncTaskPeriodicities(taskId, schedules, userId) {
 
   schedules.forEach(function(s) {
     var patch = pickPeriodicityPatch(s);
+    if (patch.is_include_in_timesheet !== undefined) {
+      patch.is_include_in_timesheet = coerceBooleanTimesheetFlag(patch.is_include_in_timesheet, true);
+    }
     if (s.task_periodicity_id) {
       incomingIds.push(String(s.task_periodicity_id));
       patch.last_modified_by = uid;
@@ -372,6 +384,7 @@ function syncTaskPeriodicities(taskId, schedules, userId) {
         task_order_id: s.task_order_id != null && s.task_order_id !== '' ? s.task_order_id : getNextTaskOrderId(),
         estimated_hours: s.estimated_hours != null ? s.estimated_hours : 0,
         spent_hours: s.spent_hours != null ? s.spent_hours : 0,
+        is_include_in_timesheet: coerceBooleanTimesheetFlag(s.is_include_in_timesheet, true),
         created_by: uid || (s.created_by || ''),
         created_on: s.created_on || nowStr,
         last_modified_by: uid,
@@ -398,7 +411,8 @@ function enrichScheduleRow(per, statuses) {
     task_date: per.task_date instanceof Date ? Utilities.formatDate(per.task_date, Session.getScriptTimeZone(), 'yyyy-MM-dd') : per.task_date,
     task_start_time: per.task_start_time instanceof Date ? Utilities.formatDate(per.task_start_time, Session.getScriptTimeZone(), 'HH:mm') : per.task_start_time,
     task_end_time: per.task_end_time instanceof Date ? Utilities.formatDate(per.task_end_time, Session.getScriptTimeZone(), 'HH:mm') : per.task_end_time,
-    status_label: s ? (s.status_label || s.status_name) : 'Unknown'
+    status_label: s ? (s.status_label || s.status_name) : 'Unknown',
+    is_include_in_timesheet: coerceBooleanTimesheetFlag(per.is_include_in_timesheet, true)
   });
 }
 
@@ -440,6 +454,7 @@ function handleCreateTaskSchedule(body) {
     task_order_id: body.task_order_id != null && body.task_order_id !== '' ? body.task_order_id : getNextTaskOrderId(),
     estimated_hours: body.estimated_hours != null ? body.estimated_hours : 0,
     spent_hours: body.spent_hours != null ? body.spent_hours : 0,
+    is_include_in_timesheet: coerceBooleanTimesheetFlag(body.is_include_in_timesheet, true),
     created_by: uid,
     created_on: createdAt,
     last_modified_by: uid,
@@ -453,6 +468,9 @@ function handleUpdateTaskSchedule(body) {
   if (!body.task_periodicity_id) return error('task_periodicity_id required', 400);
   ensureTaskPeriodicityIds();
   body.last_modified_on = now();
+  if (body.is_include_in_timesheet !== undefined) {
+    body.is_include_in_timesheet = coerceBooleanTimesheetFlag(body.is_include_in_timesheet, true);
+  }
   var updated = updateRowById('tasks_manager_tasks_periodicty', 'task_periodicity_id', body.task_periodicity_id, body);
   if (!updated) return error('Schedule row not found', 404);
   return success({ message: 'Schedule updated' });
@@ -1493,6 +1511,7 @@ function handleCreateTask(body) {
         task_order_id: s.task_order_id != null && s.task_order_id !== '' ? s.task_order_id : getNextTaskOrderId(),
         estimated_hours: s.estimated_hours != null ? s.estimated_hours : 0,
         spent_hours: s.spent_hours != null ? s.spent_hours : 0,
+        is_include_in_timesheet: coerceBooleanTimesheetFlag(s.is_include_in_timesheet, true),
         created_by: uid,
         created_on: createdAt,
         last_modified_by: uid,
@@ -1513,6 +1532,7 @@ function handleCreateTask(body) {
       task_order_id: body.task_order_id || getNextTaskOrderId(),
       estimated_hours: body.estimated_hours || 0,
       spent_hours: body.spent_hours || 0,
+      is_include_in_timesheet: coerceBooleanTimesheetFlag(body.is_include_in_timesheet, true),
       created_by: uid,
       created_on: createdAt,
       last_modified_by: uid,
@@ -1555,6 +1575,9 @@ function handleUpdateTask(body) {
     }
   } else if (body.task_periodicity_id) {
     var singlePatch = pickPeriodicityPatch(body);
+    if (singlePatch.is_include_in_timesheet !== undefined) {
+      singlePatch.is_include_in_timesheet = coerceBooleanTimesheetFlag(singlePatch.is_include_in_timesheet, true);
+    }
     if (Object.keys(singlePatch).length > 0) {
       singlePatch.last_modified_by = uid;
       singlePatch.last_modified_on = body.last_modified_on;
@@ -1562,6 +1585,9 @@ function handleUpdateTask(body) {
     }
   } else {
     var patch = pickPeriodicityPatch(body);
+    if (patch.is_include_in_timesheet !== undefined) {
+      patch.is_include_in_timesheet = coerceBooleanTimesheetFlag(patch.is_include_in_timesheet, true);
+    }
     if (Object.keys(patch).length > 0) {
       patch.last_modified_by = uid;
       patch.last_modified_on = body.last_modified_on;
