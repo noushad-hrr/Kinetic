@@ -684,11 +684,17 @@ export class TmProjectsComponent implements OnInit {
   });
 
   pendingTasks(projectId: string): number {
-    return this.ws.tasks().filter(t => t.projectId === projectId && t.status !== 'Completed').length;
+    const rows = this.ws.tasks().filter(t => t.projectId === projectId);
+    const ids = [...new Set(rows.map(t => t.taskId))];
+    return ids.filter(tid => {
+      const slices = rows.filter(t => t.taskId === tid);
+      return !slices.every(t => t.status === 'Completed');
+    }).length;
   }
 
   totalTasks(projectId: string): number {
-    return this.ws.tasks().filter(t => t.projectId === projectId).length;
+    const rows = this.ws.tasks().filter(t => t.projectId === projectId);
+    return new Set(rows.map(t => t.taskId)).size;
   }
 
   progressPct(p: Project): number {

@@ -1,21 +1,25 @@
 import { Component, OnDestroy, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule, ReactiveFormsModule, FormBuilder, Validators, FormArray, AbstractControl, ValidationErrors } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { FormsModule, ReactiveFormsModule, FormBuilder, Validators, FormArray, FormGroup, AbstractControl, ValidationErrors } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { TaskWorkspaceService, TmTaskRow } from '../../services/task-workspace.service';
+import { TaskSchedule } from '../../models';
 import { DrawerPanelComponent } from '../../shared/components/ui/drawer-panel.component';
 import { ConfirmDialogComponent } from '../../shared/components/ui/confirm-dialog.component';
 import { MastersService } from '../../services/masters.service';
 import { ToastService } from '../../services/toast.service';
 
 function dateTimeRangeValidator(group: AbstractControl): ValidationErrors | null {
-  const startDate = group.get('task_start_date')?.value;
-  const endDate   = group.get('task_end_date')?.value;
   const startTime = group.get('task_start_time')?.value;
   const endTime   = group.get('task_end_time')?.value;
-  if (startDate && endDate && startDate > endDate) return { dateRangeInvalid: true };
-  if (startDate && endDate && startDate === endDate && startTime && endTime && startTime >= endTime) return { timeRangeInvalid: true };
+  if (startTime && endTime && startTime >= endTime) return { timeRangeInvalid: true };
+  return null;
+}
+
+function atLeastOneScheduleValidator(control: AbstractControl): ValidationErrors | null {
+  const arr = control.get('schedules') as FormArray | null;
+  if (!arr || arr.length < 1) return { schedulesRequired: true };
   return null;
 }
 
@@ -26,6 +30,7 @@ const DAY_RANGE_MINS = DAY_END_MINS - DAY_START_MINS;
 
 export interface DayChartBlock {
   task: TmTaskRow;
+  trackId: string;
   topPct: number;
   heightPct: number;
   leftPct: number;
@@ -35,7 +40,7 @@ export interface DayChartBlock {
 @Component({
   selector: 'app-tm-tasks',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, DrawerPanelComponent, ConfirmDialogComponent],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, DrawerPanelComponent, ConfirmDialogComponent],
   template: `
     <div class="p-4 max-w-7xl mx-auto space-y-4" (click)="openDropdown.set(null)">
 
@@ -177,7 +182,7 @@ export interface DayChartBlock {
               <span class="text-xs font-semibold text-slate-800 dark:text-neutral-100 truncate">{{ prettyDayLabel() }}</span>
             </div>
             <span class="text-2xs text-slate-400 dark:text-neutral-500 tabular-nums">
-              {{ chartFiltered().length }} blocks · {{ chartDoneCount() }} done
+              {{ dayChartEntries().length }} blocks · {{ chartDoneCount() }} done
             </span>
           </div>
           <div class="flex flex-1 min-h-0 overflow-auto">
@@ -198,7 +203,7 @@ export interface DayChartBlock {
                        [style.top.%]="hourTopPct(i) + (100 / hourLabels.length / 2)"></div>
                 }
               </div>
-              @for (b of layoutDayChart(); track b.task.id) {
+              @for (b of layoutDayChart(); track b.trackId) {
                 <div class="absolute z-10 px-1 box-border transition-transform hover:z-20 hover:scale-[1.01]"
                      [style.top.%]="b.topPct"
                      [style.height.%]="b.heightPct"
@@ -256,11 +261,10 @@ export interface DayChartBlock {
                 <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider">Status</th>
                 <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden md:table-cell">Priority</th>
                 <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Type</th>
-                <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Start</th>
-                <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">End</th>
+                <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Date</th>
                 <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Time</th>
                 <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Hours (S/E)</th>
-                <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Assignees</th>
+                <th class="text-left px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider hidden lg:table-cell">Remarks</th>
                 <th class="text-right px-3 py-2.5 text-2xs font-semibold text-slate-500 dark:text-neutral-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -270,14 +274,14 @@ export interface DayChartBlock {
                   <td class="px-3 py-2.5">
                     <div class="flex items-center gap-2">
                       <p class="font-semibold text-slate-800 dark:text-neutral-100 truncate max-w-[200px]">{{ t.title }}</p>
-                      @if (t.hasRemarks) {
-                        <span class="material-symbols-outlined text-[14px] text-slate-400" title="Has remarks">notes</span>
-                      }
-                      @if (t.artifacts?.length) {
+                      @if (t.artifacts.length) {
                         <span class="material-symbols-outlined text-[14px] text-slate-400" title="Has attachments">attach_file</span>
                       }
+                      @if (t.scheduleCount > 1) {
+                        <span class="material-symbols-outlined text-[14px] text-slate-400" title="Multiple schedules">event_repeat</span>
+                      }
                     </div>
-                    <p class="text-2xs text-slate-400 font-mono">{{ t.id }}</p>
+                    <p class="text-2xs text-slate-400 font-mono">{{ t.taskId }}</p>
                   </td>
                   <td class="px-3 py-2.5 text-slate-600 dark:text-neutral-400 hidden sm:table-cell">
                     <span class="truncate block max-w-[140px] font-medium">{{ ws.projectName(t.projectId) }}</span>
@@ -291,17 +295,20 @@ export interface DayChartBlock {
                   <td class="px-3 py-2.5 hidden lg:table-cell">
                     <span class="text-2xs text-slate-600 dark:text-neutral-400">{{ t.typeLabel }}</span>
                   </td>
-                  <td class="px-3 py-2.5 text-2xs text-slate-500 dark:text-neutral-400 hidden lg:table-cell">{{ t.startDate | date:'MMM d' }}</td>
-                  <td class="px-3 py-2.5 text-2xs text-slate-500 dark:text-neutral-400 hidden lg:table-cell">{{ t.endDate | date:'MMM d' }}</td>
+                  <td class="px-3 py-2.5 text-2xs text-slate-500 dark:text-neutral-400 hidden lg:table-cell">
+                    <div>{{ t.taskDate | date:'MMM d, y' }}</div>
+                    @if (t.scheduleCount > 1) {
+                      <div class="text-[10px] text-slate-400 dark:text-neutral-500 mt-0.5">{{ formatTaskDateRange(t) }}</div>
+                    }
+                  </td>
                   <td class="px-3 py-2.5 text-2xs font-medium text-slate-700 dark:text-neutral-300 hidden lg:table-cell">{{ t.startTime }} - {{ t.endTime }}</td>
                   <td class="px-3 py-2.5 text-2xs font-semibold text-slate-700 dark:text-neutral-300 hidden lg:table-cell">{{ t.spent_hours || 0 }} / {{ t.estimated_hours || 0 }}h</td>
-                  <td class="px-3 py-2.5 text-slate-600 dark:text-neutral-400 hidden lg:table-cell">
-                    <div class="flex items-center gap-1.5">
-                      <div class="w-5 h-5 rounded-full bg-primary/15 dark:bg-[#3c3c3c] flex items-center justify-center text-[9px] font-bold text-primary dark:text-neutral-200" [title]="t.assignee">
-                        {{ initials(t.assignee) }}
-                      </div>
-                      <span class="truncate max-w-[80px]">{{ t.assignee }}</span>
-                    </div>
+                  <td class="px-3 py-2.5 text-2xs text-slate-600 dark:text-neutral-400 hidden lg:table-cell max-w-[200px]">
+                    @if (remarksCellText(t)) {
+                      <p class="line-clamp-2 break-words" [title]="remarksCellText(t)">{{ remarksCellText(t) }}</p>
+                    } @else {
+                      <span class="text-slate-400 dark:text-neutral-600">—</span>
+                    }
                   </td>
                   <td class="px-3 py-2.5 text-right">
                     <div class="flex justify-end gap-0.5">
@@ -321,7 +328,7 @@ export interface DayChartBlock {
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="11" class="px-3 py-12 text-center text-slate-400 dark:text-neutral-500 text-xs">No tasks match your filters.</td></tr>
+                <tr><td colspan="10" class="px-3 py-12 text-center text-slate-400 dark:text-neutral-500 text-xs">No tasks match your filters.</td></tr>
               }
             </tbody>
           </table>
@@ -389,6 +396,15 @@ export interface DayChartBlock {
       @if (taskForm) {
         <form [formGroup]="taskForm" class="space-y-4">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            @if (editingTask(); as et) {
+              @if (et.taskDate) {
+                <div class="md:col-span-2 rounded-xl border-2 border-primary/35 bg-primary/[0.06] dark:bg-primary/10 px-4 py-3 space-y-0.5">
+                  <p class="text-[10px] font-bold text-primary uppercase tracking-wider">This occurrence (list row)</p>
+                  <p class="text-sm font-bold text-slate-900 dark:text-neutral-100">{{ et.taskDate | date:'EEEE, MMM d, y' }}</p>
+                  <p class="text-xs text-slate-600 dark:text-neutral-400 tabular-nums">{{ et.startTime }} – {{ et.endTime }}</p>
+                </div>
+              }
+            }
             <div class="md:col-span-2">
               <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Task Title</label>
               <input formControlName="task_title" type="text" placeholder="What needs to be done?"
@@ -407,7 +423,7 @@ export interface DayChartBlock {
                   <option [value]="p.id">{{ p.name }} — {{ p.status }}</option>
                 }
               </select>
-              @if (taskForm.get('project_id_fk')?.invalid && taskForm.get('project_id_fk')?.touched) {
+              @if (taskForm.get('project_id_fk')?.invalid && (taskForm.get('project_id_fk')?.touched || saveAttempted())) {
                 <p class="text-red-500 text-[10px] mt-1">Project is required</p>
               }
             </div>
@@ -423,16 +439,6 @@ export interface DayChartBlock {
             </div>
 
             <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Status</label>
-              <select formControlName="task_status_id"
-                      class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-                @for (s of masters.statuses(); track s.status_id) {
-                  <option [value]="s.status_id">{{ s.status_label }}</option>
-                }
-              </select>
-            </div>
-
-            <div>
               <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Priority</label>
               <select formControlName="priority_id"
                       class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
@@ -442,38 +448,95 @@ export interface DayChartBlock {
               </select>
             </div>
 
-            <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Start Date</label>
-              <input formControlName="task_start_date" type="date"
-                     [class.border-red-400]="taskForm.errors?.['dateRangeInvalid'] && taskForm.touched"
-                     class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+            <div class="md:col-span-2">
+              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Description</label>
+              <textarea formControlName="task_description" rows="3" placeholder="Describe what this task involves..."
+                        class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary"></textarea>
             </div>
 
-            <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Due Date</label>
-              <input formControlName="task_end_date" type="date"
-                     [class.border-red-400]="taskForm.errors?.['dateRangeInvalid'] && taskForm.touched"
-                     class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-              @if (taskForm.errors?.['dateRangeInvalid'] && taskForm.touched) {
-                <p class="text-red-500 text-[10px] mt-1">End date cannot be before start date</p>
+            <div class="md:col-span-2 space-y-3 pt-2 border-t border-slate-100 dark:border-[#3c3c3c]">
+              <div class="flex items-center justify-between">
+                <label class="block text-2xs font-bold text-slate-500 uppercase tracking-wider">Schedules</label>
+                <button type="button" (click)="addSchedule()" class="text-xs text-primary font-bold flex items-center gap-1 hover:underline">
+                  <span class="material-symbols-outlined text-[16px]">add_circle</span> Add schedule
+                </button>
+              </div>
+              @if (taskForm.errors?.['schedulesRequired'] && taskForm.touched) {
+                <p class="text-red-500 text-[10px]">Add at least one schedule (date &amp; time window).</p>
               }
-            </div>
-
-            <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Start Time</label>
-              <input formControlName="task_start_time" type="time"
-                     [class.border-red-400]="taskForm.errors?.['timeRangeInvalid'] && taskForm.touched"
-                     class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-            </div>
-
-            <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">End Time</label>
-              <input formControlName="task_end_time" type="time"
-                     [class.border-red-400]="taskForm.errors?.['timeRangeInvalid'] && taskForm.touched"
-                     class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-              @if (taskForm.errors?.['timeRangeInvalid'] && taskForm.touched) {
-                <p class="text-red-500 text-[10px] mt-1">End time must be after start time on the same date</p>
-              }
+              <div formArrayName="schedules" class="space-y-3">
+                @for (sch of schedulesArray.controls; track sch) {
+                  <div [formGroupName]="$index"
+                       class="p-3 bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-[#3c3c3c] rounded-xl relative transition-shadow"
+                       [class.ring-2]="sch.get('task_periodicity_id')?.value && sch.get('task_periodicity_id')?.value === highlightPeriodicityId()"
+                       [class.ring-primary]="sch.get('task_periodicity_id')?.value && sch.get('task_periodicity_id')?.value === highlightPeriodicityId()"
+                       [class.border-primary]="sch.get('task_periodicity_id')?.value && sch.get('task_periodicity_id')?.value === highlightPeriodicityId()">
+                    @if (schedulesArray.length > 1) {
+                      <button type="button" (click)="removeSchedule($index)" class="absolute -top-2 -right-2 w-5 h-5 bg-white dark:bg-[#3c3c3c] border border-slate-200 dark:border-[#4c4c4c] rounded-full text-red-500 hover:text-red-600 shadow-sm flex items-center justify-center transition-transform hover:scale-110" title="Remove schedule">
+                        <span class="material-symbols-outlined text-[14px]">close</span>
+                      </button>
+                    }
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Schedule {{ $index + 1 }}</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Status</label>
+                        <select formControlName="task_status_id"
+                                class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                          @for (s of masters.statuses(); track s.status_id) {
+                            <option [value]="s.status_id">{{ s.status_label }}</option>
+                          }
+                        </select>
+                      </div>
+                      <div class="rounded-lg p-1.5 -m-0.5 transition-shadow"
+                           [ngClass]="{ 'ring-2 ring-primary bg-primary/10 dark:bg-primary/15': scheduleFormHighlighted(sch) }">
+                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Date</label>
+                        <input formControlName="task_date" type="date"
+                               class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                        @if (sch.get('task_date')?.invalid && sch.get('task_date')?.touched) {
+                          <p class="text-red-500 text-[10px] mt-1">Date is required</p>
+                        }
+                      </div>
+                      <div class="rounded-lg p-1.5 -m-0.5 transition-shadow"
+                           [ngClass]="{ 'ring-2 ring-primary bg-primary/10 dark:bg-primary/15': scheduleFormHighlighted(sch) }">
+                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Start time</label>
+                        <input formControlName="task_start_time" type="time"
+                               [class.border-red-400]="sch.errors?.['timeRangeInvalid'] && sch.touched"
+                               class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                      </div>
+                      <div class="rounded-lg p-1.5 -m-0.5 transition-shadow"
+                           [ngClass]="{ 'ring-2 ring-primary bg-primary/10 dark:bg-primary/15': scheduleFormHighlighted(sch) }">
+                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">End time</label>
+                        <input formControlName="task_end_time" type="time"
+                               [class.border-red-400]="sch.errors?.['timeRangeInvalid'] && sch.touched"
+                               class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                        @if (sch.errors?.['timeRangeInvalid'] && sch.touched) {
+                          <p class="text-red-500 text-[10px] mt-1">End after start</p>
+                        }
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Remarks</label>
+                        <textarea formControlName="task_remarks" rows="2" placeholder="Notes for this occurrence…"
+                                  class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary"></textarea>
+                        @if (sch.get('task_remarks')?.invalid && sch.get('task_remarks')?.touched) {
+                          <p class="text-red-500 text-[10px] mt-1">Remarks are required</p>
+                        }
+                      </div>
+                      <div>
+                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Estimated hours</label>
+                        <input formControlName="estimated_hours" type="number" step="0.5"
+                               class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                      </div>
+                      <div>
+                        <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Spent hours</label>
+                        <input formControlName="spent_hours" type="number" step="0.5"
+                               class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
+                      </div>
+                    </div>
+                  </div>
+                } @empty {
+                  <p class="text-[10px] text-center text-slate-400 py-3 border border-dashed border-slate-200 dark:border-[#3c3c3c] rounded-xl italic">No schedules — use Add schedule.</p>
+                }
+              </div>
             </div>
 
             <div class="md:col-span-2">
@@ -495,29 +558,6 @@ export interface DayChartBlock {
               }
             </div>
 
-            <div class="md:col-span-2">
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Remarks</label>
-              <textarea formControlName="task_remarks" rows="2" placeholder="Any additional notes..."
-                        class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary"></textarea>
-            </div>
-
-            <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Estimated Hours</label>
-              <input formControlName="estimated_hours" type="number" step="0.5"
-                     class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-              @if (taskForm.get('estimated_hours')?.invalid && taskForm.get('estimated_hours')?.touched) {
-                <p class="text-red-500 text-[10px] mt-1">Required</p>
-              }
-            </div>
-
-            <div>
-              <label class="block text-2xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Spent Hours</label>
-              <input formControlName="spent_hours" type="number" step="0.5"
-                     class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-[#3c3c3c] rounded-lg bg-white dark:bg-[#252526] focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary">
-              @if (taskForm.get('spent_hours')?.invalid && taskForm.get('spent_hours')?.touched) {
-                <p class="text-red-500 text-[10px] mt-1">Required</p>
-              }
-            </div>
           </div>
 
           <!-- Task Artifacts (Add/Edit) -->
@@ -593,8 +633,19 @@ export interface DayChartBlock {
         <div class="space-y-6">
           <div>
             <h3 class="text-lg font-bold text-slate-900 dark:text-neutral-100 mb-1">{{ t.title }}</h3>
-            <p class="text-xs text-slate-400 font-mono">{{ t.id }}</p>
+            <p class="text-xs text-slate-400 font-mono">{{ t.taskId }}</p>
           </div>
+
+          @if (t.taskDate) {
+            <div class="rounded-xl border-2 border-primary/35 bg-primary/[0.06] dark:bg-primary/10 px-4 py-3 space-y-1">
+              <p class="text-[10px] font-bold text-primary uppercase tracking-wider">This occurrence</p>
+              <p class="text-base font-bold text-slate-900 dark:text-neutral-100">{{ t.taskDate | date:'EEEE, MMM d, y' }}</p>
+              <p class="text-sm text-slate-600 dark:text-neutral-300 tabular-nums">{{ t.startTime }} – {{ t.endTime }}</p>
+              @if (t.task_remarks?.trim()) {
+                <p class="text-xs text-slate-600 dark:text-neutral-400 pt-1 border-t border-primary/20 mt-2 whitespace-pre-wrap">{{ t.task_remarks }}</p>
+              }
+            </div>
+          }
 
           <div class="grid grid-cols-2 gap-6">
             <div class="space-y-1">
@@ -613,44 +664,56 @@ export interface DayChartBlock {
               <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Priority</label>
               <div><span class="px-2 py-0.5 rounded-md text-2xs font-semibold" [class]="priorityClass(t.priority)">{{ t.priority }}</span></div>
             </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-6 p-4 bg-slate-50 dark:bg-white/[0.03] rounded-xl border border-slate-100 dark:border-[#3c3c3c]">
-            <div class="space-y-1">
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date Range</label>
-              <p class="text-sm font-medium text-slate-700 dark:text-neutral-200">{{ t.startDate | date:'MMM d, y' }} - {{ t.endDate | date:'MMM d, y' }}</p>
-            </div>
-            <div class="space-y-1">
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Time Window</label>
-              <p class="text-sm font-medium text-slate-700 dark:text-neutral-200">{{ t.startTime }} - {{ t.endTime }}</p>
-            </div>
-            <div class="space-y-1">
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estimated</label>
-              <p class="text-sm font-medium text-slate-700 dark:text-neutral-200">{{ t.estimated_hours || 0 }} hours</p>
-            </div>
-            <div class="space-y-1">
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Spent</label>
-              <p class="text-sm font-medium text-slate-700 dark:text-neutral-200 font-semibold">{{ t.spent_hours || 0 }} hours</p>
-            </div>
-          </div>
-
-          <div class="space-y-1">
-            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Assignees</label>
-            <div class="flex flex-wrap gap-2">
-              <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#2d2d2d] border border-slate-100 dark:border-[#3c3c3c] shadow-sm">
-                <div class="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
-                  {{ initials(t.assignee) }}
-                </div>
-                <span class="text-xs font-medium text-slate-600 dark:text-neutral-300">{{ t.assignee }}</span>
+            @if (t.scheduleCount > 1 && (t.startDate || t.endDate)) {
+              <div class="space-y-1 md:col-span-2">
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date range (all schedules)</label>
+                <p class="text-sm font-semibold text-slate-700 dark:text-neutral-200">{{ t.startDate | date:'MMM d, y' }} – {{ t.endDate | date:'MMM d, y' }}</p>
               </div>
-            </div>
+            }
           </div>
 
-          @if (t.task_remarks) {
+          <div class="space-y-3">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Schedules</label>
+            @for (sch of t.schedules; track sch.task_periodicity_id || $index) {
+              <div class="p-4 bg-slate-50 dark:bg-white/[0.03] rounded-xl border border-slate-100 dark:border-[#3c3c3c] grid grid-cols-2 gap-4 transition-shadow"
+                   [class.ring-2]="isHighlightedSchedule(t, sch)"
+                   [class.ring-primary]="isHighlightedSchedule(t, sch)"
+                   [class.border-primary]="isHighlightedSchedule(t, sch)">
+                <div class="space-y-1 md:col-span-2">
+                  <p class="text-2xs font-mono text-slate-400">{{ sch.task_periodicity_id || '—' }}</p>
+                  <span class="px-2 py-0.5 rounded-md text-2xs font-semibold inline-block" [class]="statusClass(sch.status_label || t.status)">{{ sch.status_label || t.status }}</span>
+                </div>
+                <div class="space-y-1 rounded-lg p-1.5 -m-0.5 transition-shadow"
+                     [ngClass]="{ 'ring-2 ring-primary bg-primary/10 dark:bg-primary/15': isHighlightedSchedule(t, sch) }">
+                  <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date</label>
+                  <p class="text-sm font-medium text-slate-700 dark:text-neutral-200">{{ sch.task_date | date:'MMM d, y' }}</p>
+                </div>
+                <div class="space-y-1 rounded-lg p-1.5 -m-0.5 transition-shadow"
+                     [ngClass]="{ 'ring-2 ring-primary bg-primary/10 dark:bg-primary/15': isHighlightedSchedule(t, sch) }">
+                  <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Time</label>
+                  <p class="text-sm font-medium text-slate-700 dark:text-neutral-200">{{ sch.task_start_time }} – {{ sch.task_end_time }}</p>
+                </div>
+                <div class="space-y-1">
+                  <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Est. / Spent</label>
+                  <p class="text-sm font-medium text-slate-700 dark:text-neutral-200">{{ sch.estimated_hours ?? 0 }}h / {{ sch.spent_hours ?? 0 }}h</p>
+                </div>
+                @if (sch.task_remarks) {
+                  <div class="space-y-1 md:col-span-2">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Remarks</label>
+                    <p class="text-sm text-slate-600 dark:text-neutral-300 whitespace-pre-wrap">{{ sch.task_remarks }}</p>
+                  </div>
+                }
+              </div>
+            } @empty {
+              <p class="text-xs text-slate-500">No schedule rows.</p>
+            }
+          </div>
+
+          @if (t.description) {
             <div class="space-y-1">
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Remarks</label>
-              <div class="p-4 bg-blue-50/50 dark:bg-white/[0.02] border border-blue-100/50 dark:border-[#3c3c3c] rounded-xl">
-                <p class="text-sm text-slate-600 dark:text-neutral-300 whitespace-pre-wrap leading-relaxed">{{ t.task_remarks }}</p>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</label>
+              <div class="p-4 bg-slate-50/60 dark:bg-white/[0.02] border border-slate-100 dark:border-[#3c3c3c] rounded-xl overflow-hidden">
+                <p class="text-sm text-slate-600 dark:text-neutral-300 whitespace-pre-wrap leading-relaxed break-all">{{ t.description }}</p>
               </div>
             </div>
           }
@@ -790,13 +853,21 @@ export class TmTasksComponent implements OnInit, OnDestroy {
       // Multi-select project (if not scoped from URL)
       if (this.selectedProjects().length > 0 && !this.selectedProjects().includes(t.projectId)) return false;
 
-      // Date range
-      if (this.startDateFilter() && t.startDate && t.startDate < this.startDateFilter()) return false;
-      if (this.endDateFilter() && t.endDate && t.endDate > this.endDateFilter()) return false;
+      // Date range (match if any schedule date falls in range)
+      if (this.startDateFilter() || this.endDateFilter()) {
+        const dates = (t.schedules?.length ? t.schedules.map(s => s.task_date).filter(Boolean) : [t.taskDate]).filter(Boolean) as string[];
+        if (!dates.length) return false;
+        const inRange = dates.some(d => {
+          if (this.startDateFilter() && d < this.startDateFilter()) return false;
+          if (this.endDateFilter() && d > this.endDateFilter()) return false;
+          return true;
+        });
+        if (!inRange) return false;
+      }
 
       // Search
       const s = this.searchFilter().toLowerCase();
-      if (s && !t.title.toLowerCase().includes(s) && !t.id.toLowerCase().includes(s)) return false;
+      if (s && !t.title.toLowerCase().includes(s) && !t.taskId.toLowerCase().includes(s) && !t.id.toLowerCase().includes(s)) return false;
       return true;
     });
   });
@@ -824,6 +895,21 @@ export class TmTasksComponent implements OnInit, OnDestroy {
     return res;
   });
 
+  /** One block per list row; each row is already scoped to one schedule's date/time from the API */
+  readonly dayChartEntries = computed(() => {
+    const day = this.selectedDay();
+    const q = this.searchFilter().toLowerCase();
+    this.ws.tasks();
+    this.masters.statuses();
+    const out: { display: TmTaskRow; trackId: string }[] = [];
+    for (const t of this.tasksInScope()) {
+      if ((t.dueDate || '') !== day) continue;
+      if (q && !t.title.toLowerCase().includes(q) && !t.taskId.toLowerCase().includes(q) && !t.id.toLowerCase().includes(q)) continue;
+      out.push({ display: t, trackId: t.id });
+    }
+    return out;
+  });
+
   /** 0–23 → full 24h; row height keeps chart scrollable inside the panel */
   readonly hourLabels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
   readonly hourSlotPx = 42;
@@ -834,22 +920,19 @@ export class TmTasksComponent implements OnInit, OnDestroy {
   deleteTarget = signal<TmTaskRow | null>(null);
 
   selectedAssigneeIds = signal<string[]>([]);
+  saveAttempted = signal(false);
+  /** Schedule row to ring-highlight when opening edit from a list row */
+  highlightPeriodicityId = signal<string | null>(null);
 
   taskForm = this.fb.group({
     task_title: ['', Validators.required],
     project_id_fk: ['', Validators.required],
-    task_status_id: ['', Validators.required],
     priority_id: ['', Validators.required],
     type_id: ['T001', Validators.required],
-    task_remarks: [''],
-    task_start_date: ['', Validators.required],
-    task_end_date: ['', Validators.required],
-    task_start_time: ['00:00', Validators.required],
-    task_end_time: ['00:30', Validators.required],
-    estimated_hours: [0, [Validators.required, Validators.min(0)]],
-    spent_hours: [0, [Validators.required, Validators.min(0)]],
+    task_description: [''],
+    schedules: this.fb.array([]),
     artifacts: this.fb.array([])
-  }, { validators: dateTimeRangeValidator });
+  }, { validators: atLeastOneScheduleValidator });
 
   private sub?: Subscription;
 
@@ -958,6 +1041,34 @@ export class TmTasksComponent implements OnInit, OnDestroy {
     return `${this.minsToTime(start)} – ${this.minsToTime(end)}`;
   }
 
+  formatTaskDateRange(task: TmTaskRow): string {
+    if (!task.startDate && !task.endDate) return '';
+    if (!task.startDate) return this.formatDateShort(task.endDate);
+    if (!task.endDate) return this.formatDateShort(task.startDate);
+    return `${this.formatDateShort(task.startDate)} - ${this.formatDateShort(task.endDate)}`;
+  }
+
+  remarksCellText(t: TmTaskRow): string {
+    return (t.task_remarks || '').trim();
+  }
+
+  scheduleFormHighlighted(sch: AbstractControl): boolean {
+    const hid = this.highlightPeriodicityId();
+    if (!hid) return false;
+    return sch.get('task_periodicity_id')?.value === hid;
+  }
+
+  isHighlightedSchedule(t: TmTaskRow, sch: TaskSchedule): boolean {
+    return !!(t.periodicityId && sch.task_periodicity_id && sch.task_periodicity_id === t.periodicityId);
+  }
+
+  private formatDateShort(ymd: string): string {
+    if (!ymd || ymd.length < 10) return '';
+    const [y, m, d] = ymd.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   timelineCardBorder(priority: string): string {
     const map: Record<string, string> = {
       'Very High': 'border-l-4 border-l-rose-600 dark:border-l-rose-500',
@@ -1019,6 +1130,34 @@ export class TmTasksComponent implements OnInit, OnDestroy {
     return this.taskForm.get('artifacts') as FormArray;
   }
 
+  get schedulesArray() {
+    return this.taskForm.get('schedules') as FormArray;
+  }
+
+  createScheduleGroup(s?: Partial<TaskSchedule>): FormGroup {
+    const today = this.todayYmd();
+    const firstStatus = this.masters.statuses()[0]?.status_id || '';
+    return this.fb.group({
+      task_periodicity_id: [s?.task_periodicity_id || ''],
+      task_status_id: [s?.task_status_id || firstStatus, Validators.required],
+      task_date: [s?.task_date || today, Validators.required],
+      task_start_time: [s?.task_start_time || '00:00', Validators.required],
+      task_end_time: [s?.task_end_time || '00:30', Validators.required],
+      task_remarks: [s?.task_remarks || '', [Validators.required, Validators.pattern(/\S+/)]],
+      estimated_hours: [s?.estimated_hours ?? 0, [Validators.required, Validators.min(0)]],
+      spent_hours: [s?.spent_hours ?? 0, [Validators.required, Validators.min(0)]],
+    }, { validators: dateTimeRangeValidator });
+  }
+
+  addSchedule() {
+    this.schedulesArray.push(this.createScheduleGroup());
+  }
+
+  removeSchedule(index: number) {
+    if (this.schedulesArray.length <= 1) return;
+    this.schedulesArray.removeAt(index);
+  }
+
   addArtifact() {
     this.artifactsArray.push(this.fb.group({
       artifact_title: ['', Validators.required],
@@ -1055,28 +1194,19 @@ export class TmTasksComponent implements OnInit, OnDestroy {
     if (this.currentPage() < this.totalPages()) this.currentPage.update(c => c + 1);
   }
 
-  /** Day chart: same day + scope + search only (status tabs apply) */
-  chartFiltered(): TmTaskRow[] {
-    const day = this.selectedDay();
-    return this.tasksInScope().filter(t => {
-      if (!t.dueDate || t.dueDate !== day) return false;
-      const s = this.searchFilter().toLowerCase();
-      if (s && !t.title.toLowerCase().includes(s) && !t.id.toLowerCase().includes(s)) return false;
-      return true;
-    });
-  }
-
   chartDoneCount(): number {
-    return this.chartFiltered().filter(t => t.status === 'Completed').length;
+    return this.dayChartEntries().filter(e => e.display.status === 'Completed').length;
   }
 
   layoutDayChart(): DayChartBlock[] {
-    const tasks = [...this.chartFiltered()].sort((a, b) => this.scheduleBounds(a).start - this.scheduleBounds(b).start);
+    const entries = [...this.dayChartEntries()].sort(
+      (a, b) => this.scheduleBounds(a.display).start - this.scheduleBounds(b.display).start
+    );
     const laneEnds: number[] = [];
-    type Placed = { task: TmTaskRow; lane: number; start: number; end: number };
+    type Placed = { task: TmTaskRow; trackId: string; lane: number; start: number; end: number };
     const placed: Placed[] = [];
 
-    for (const task of tasks) {
+    for (const { display: task, trackId } of entries) {
       const b = this.scheduleBounds(task);
       let start = Math.max(DAY_START_MINS, b.start);
       let end = Math.min(DAY_END_MINS, b.end);
@@ -1095,20 +1225,20 @@ export class TmTasksComponent implements OnInit, OnDestroy {
       } else {
         laneEnds[lane] = end;
       }
-      placed.push({ task, lane, start, end });
+      placed.push({ task, trackId, lane, start, end });
     }
 
     const laneCount = Math.max(1, laneEnds.length);
     const pad = 0.35;
     const cell = 100 / laneCount;
 
-    return placed.map(({ task, lane, start, end }) => {
+    return placed.map(({ task, trackId, lane, start, end }) => {
       const topPct = ((start - DAY_START_MINS) / DAY_RANGE_MINS) * 100;
       let heightPct = ((end - start) / DAY_RANGE_MINS) * 100;
       heightPct = Math.max(heightPct, 2.8);
       const leftPct = lane * cell + pad;
       const widthPct = cell - 2 * pad;
-      return { task, topPct, heightPct, leftPct, widthPct };
+      return { task, trackId, topPct, heightPct, leftPct, widthPct };
     });
   }
 
@@ -1135,11 +1265,6 @@ export class TmTasksComponent implements OnInit, OnDestroy {
     }
   }
 
-  initials(name: string): string {
-    if (!name) return '??';
-    return name.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase();
-  }
-
   statusClass(s: string): string {
     const map: Record<string, string> = {
       'In Progress': 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
@@ -1163,40 +1288,50 @@ export class TmTasksComponent implements OnInit, OnDestroy {
   toggleDone(task: TmTaskRow, done: boolean): void {
     const targetLabel = done ? 'Completed' : 'Open';
     const status = this.masters.statuses().find(s => (s.status_label || s.status_name) === targetLabel);
-    if (status) {
-      this.ws.updateTask(task.id, { task_status_id: status.status_id });
+    const sid = status?.status_id ?? (done ? 'S003' : 'S001');
+    if (task.periodicityId) {
+      this.ws.updateTask(task.taskId, { task_periodicity_id: task.periodicityId, task_status_id: sid });
     } else {
-      // Fallback if masters not loaded or label mismatch
-      this.ws.updateTask(task.id, { task_status_id: done ? 'S003' : 'S001' }); 
+      this.ws.updateTask(task.taskId, { task_status_id: sid });
     }
   }
 
   openTaskModal(row: TmTaskRow | null) {
+    this.saveAttempted.set(false);
+    this.highlightPeriodicityId.set(row?.periodicityId ?? null);
     this.editingTask.set(row);
     const defaultProject = this.urlProjectScope() || this.ws.projects()[0]?.id || '';
     const today = this.todayYmd();
-    
+
+    this.schedulesArray.clear();
+    this.artifactsArray.clear();
+
     if (row) {
       this.selectedAssigneeIds.set(row.assigneeIds || []);
 
-      // Clear and reset form FIRST (with empty artifacts)
-      this.artifactsArray.clear();
       this.taskForm.reset({
         task_title: row.title,
         project_id_fk: row.projectId,
-        task_status_id: row.statusId,
         priority_id: row.priorityId,
         type_id: row.typeId || 'T001',
-        task_remarks: row.task_remarks || '',
-        task_start_date: row.startDate || today,
-        task_end_date: row.endDate || today,
-        task_start_time: row.startTime,
-        task_end_time: row.endTime,
-        estimated_hours: row.estimated_hours || 0,
-        spent_hours: row.spent_hours || 0,
+        task_description: row.description || '',
       });
 
-      // Populate artifacts AFTER reset so reset does not clear their values
+      const schList = row.schedules?.length ? row.schedules : [];
+      if (schList.length) {
+        schList.forEach(s => this.schedulesArray.push(this.createScheduleGroup(s)));
+      } else {
+        this.schedulesArray.push(this.createScheduleGroup({
+          task_status_id: row.statusId,
+          task_date: row.taskDate || today,
+          task_start_time: row.startTime,
+          task_end_time: row.endTime,
+          task_remarks: row.task_remarks,
+          estimated_hours: row.estimated_hours,
+          spent_hours: row.spent_hours,
+        }));
+      }
+
       if (row.artifacts && row.artifacts.length) {
         row.artifacts.forEach((a: any) => {
           this.artifactsArray.push(this.fb.group({
@@ -1210,24 +1345,15 @@ export class TmTasksComponent implements OnInit, OnDestroy {
       }
     } else {
       this.selectedAssigneeIds.set([]);
-      this.artifactsArray.clear();
-      const firstStatus = this.masters.statuses()[0]?.status_id || '';
       const firstPriority = this.masters.priorities()[0]?.priority_id || '';
       this.taskForm.reset({
         task_title: '',
         project_id_fk: defaultProject,
-        task_status_id: firstStatus,
         priority_id: firstPriority,
         type_id: 'T001',
-        task_remarks: '',
-        task_start_date: today,
-        task_end_date: today,
-        task_start_time: '00:00',
-        task_end_time: '00:30',
-        estimated_hours: 0,
-        spent_hours: 0,
-        artifacts: []
+        task_description: '',
       });
+      this.addSchedule();
     }
     this.taskModalOpen.set(true);
   }
@@ -1235,9 +1361,12 @@ export class TmTasksComponent implements OnInit, OnDestroy {
   closeTaskModal() {
     this.taskModalOpen.set(false);
     this.editingTask.set(null);
+    this.saveAttempted.set(false);
+    this.highlightPeriodicityId.set(null);
   }
 
   async saveTask() {
+    this.saveAttempted.set(true);
     this.taskForm.markAllAsTouched();
     if (this.taskForm.invalid) {
       console.warn('Form Invalid:', this.getFormErrors());
@@ -1252,15 +1381,37 @@ export class TmTasksComponent implements OnInit, OnDestroy {
     
     const v = this.taskForm.getRawValue();
     const cur = this.editingTask();
-    
+
+    const schedulesPayload = ((v.schedules as unknown[]) || []).map((raw: unknown) => {
+      const s = raw as Record<string, unknown>;
+      const o: Record<string, unknown> = {
+        task_status_id: s['task_status_id'],
+        task_date: s['task_date'],
+        task_start_time: s['task_start_time'],
+        task_end_time: s['task_end_time'],
+        task_remarks: String(s['task_remarks'] || '').trim(),
+        estimated_hours: Number(s['estimated_hours']) || 0,
+        spent_hours: Number(s['spent_hours']) || 0,
+      };
+      const pid = s['task_periodicity_id'];
+      if (pid) o['task_periodicity_id'] = pid;
+      return o;
+    });
+
     try {
-      const payload = {
-        ...v,
-        task_assignees: this.selectedAssigneeIds().join('|')
+      const payload: Record<string, unknown> = {
+        task_title: v.task_title,
+        project_id_fk: v.project_id_fk,
+        type_id: v.type_id,
+        priority_id: v.priority_id,
+        task_description: v.task_description,
+        schedules: schedulesPayload,
+        artifacts: v.artifacts,
+        task_assignees: this.selectedAssigneeIds().join('|'),
       };
 
       if (cur) {
-        await this.ws.updateTask(cur.id, payload);
+        await this.ws.updateTask(cur.taskId, payload);
         this.toast.success('Task updated');
       } else {
         await this.ws.addTask(payload);
@@ -1286,7 +1437,7 @@ export class TmTasksComponent implements OnInit, OnDestroy {
     if (!t) return;
     
     try {
-      await this.ws.deleteTask(t.id);
+      await this.ws.deleteTask(t.taskId);
       this.toast.success('Task deleted');
     } catch (err: any) {
       this.toast.error(err.message || 'Failed to delete task');

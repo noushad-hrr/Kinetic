@@ -1,7 +1,7 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { ApiService } from './api.service';
 import { AuthService } from './auth.service';
-import { Task, Project, ApiResponse } from '../models';
+import { Task, TaskSchedule, Project, ApiResponse } from '../models';
 import { firstValueFrom } from 'rxjs';
 
 export interface TmProjectRow {
@@ -15,9 +15,13 @@ export interface TmProjectRow {
 }
 
 export interface TmTaskRow {
+  /** Stable list key (composite when one row per schedule) */
   id: string;
+  /** Real task id for update/delete APIs */
+  taskId: string;
   projectId: string;
   title: string;
+  description?: string;
   status: string;
   statusId: string;
   priority: string;
@@ -28,15 +32,21 @@ export interface TmTaskRow {
   assignee: string;
   assigneeIds: string[];
   due: string;
-  startDate: string;
-  endDate: string;
+  taskDate: string;
+  dueDate: string; // Alias for taskDate (used by day chart filter)
   startTime: string;
   endTime: string;
-  dueDate: string; // Alias for startDate
   task_remarks?: string;
   estimated_hours?: number;
   spent_hours?: number;
   artifacts: any[];
+  /** Multiple schedule rows (tasks_manager_tasks_periodicty) */
+  schedules: TaskSchedule[];
+  scheduleCount: number;
+  /** Min schedule date across task schedules */
+  startDate: string;
+  /** Max schedule date across task schedules */
+  endDate: string;
   created_by?: string;
   created_on?: string;
   last_modified_by?: string;
@@ -44,6 +54,8 @@ export interface TmTaskRow {
   /** Minutes from midnight (timeline start), e.g. 9:30 → 570 */
   scheduleStartMins: number;
   scheduleDurationMins: number;
+  /** Day-chart slice only: when set, PATCH updates this schedule row */
+  periodicityId?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -93,35 +105,105 @@ export class TaskWorkspaceService {
   }
 
   private mapToRow(t: Task): TmTaskRow {
+    const schedules = this.normalizeSchedules(t);
+    const activePid = t.task_periodicity_id;
+    const primary =
+      activePid ? schedules.find(s => s.task_periodicity_id === activePid) : schedules[0];
+    const taskDate = t.task_date || primary?.task_date || '';
+    const startTime = t.task_start_time || primary?.task_start_time || '';
+    const endTime = t.task_end_time || primary?.task_end_time || '';
+    const statusId = primary?.task_status_id || t.task_status_id;
+    const statusLabel = primary?.status_label || t.status_label || 'Open';
+    const remarks = primary?.task_remarks ?? t.task_remarks;
+    const dateRange = this.getScheduleDateRange(schedules, taskDate);
+    const pid = activePid || primary?.task_periodicity_id;
+    const taskId = t.task_id;
+    const rowId = pid ? `${taskId}__${pid}` : taskId;
+
     return {
-      id: t.task_id,
+      id: rowId,
+      taskId,
       projectId: t.project_id_fk,
       title: t.task_title,
-      status: t.status_label || 'Open',
-      statusId: t.task_status_id,
+      description: t.task_description,
+      status: statusLabel,
+      statusId,
       priority: t.priority_label || 'Medium',
       priorityId: t.priority_id,
       typeId: t.type_id || 'T001',
       typeLabel: t.type_label || 'Task',
-      hasRemarks: !!(t.task_remarks && t.task_remarks.trim()),
+      hasRemarks: schedules.some(s => !!(s.task_remarks && String(s.task_remarks).trim())),
       assignee: t.assignee_names || '',
       assigneeIds: (t.task_assignees || '').split('|').filter(Boolean),
-      due: t.task_end_date ? new Date(t.task_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '',
-      startDate: t.task_start_date || '',
-      endDate: t.task_end_date || '',
-      startTime: t.task_start_time || '',
-      endTime: t.task_end_time || '',
-      dueDate: t.task_start_date || '',
-      task_remarks: t.task_remarks,
-      estimated_hours: t.estimated_hours,
-      spent_hours: t.spent_hours,
+      due: taskDate ? new Date(taskDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '',
+      taskDate,
+      dueDate: taskDate,
+      startTime,
+      endTime,
+      task_remarks: remarks,
+      estimated_hours: primary?.estimated_hours ?? t.estimated_hours,
+      spent_hours: primary?.spent_hours ?? t.spent_hours,
       artifacts: t.artifacts || [],
+      schedules,
+      scheduleCount: schedules.length,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
       created_by: t.created_by,
       created_on: t.created_on,
       last_modified_by: t.last_modified_by,
       last_modified_on: t.last_modified_on,
-      scheduleStartMins: this.timeToMins(t.task_start_time || '10:00'),
-      scheduleDurationMins: this.calcDuration(t.task_start_time, t.task_end_time)
+      scheduleStartMins: this.timeToMins(startTime || '10:00'),
+      scheduleDurationMins: this.calcDuration(startTime, endTime),
+      periodicityId: pid || undefined
+    };
+  }
+
+  /** Build schedule list from API (schedules[]) or legacy flat task fields */
+  private normalizeSchedules(t: Task): TaskSchedule[] {
+    const raw = t.schedules;
+    if (raw && Array.isArray(raw) && raw.length > 0) {
+      return raw.map(s => ({
+        task_periodicity_id: s.task_periodicity_id,
+        task_id_fk: s.task_id_fk,
+        task_remarks: s.task_remarks,
+        task_status_id: s.task_status_id,
+        task_date: s.task_date || '',
+        task_start_time: s.task_start_time || '',
+        task_end_time: s.task_end_time || '',
+        task_order_id: s.task_order_id as number | undefined,
+        estimated_hours: s.estimated_hours,
+        spent_hours: s.spent_hours,
+        created_by: s.created_by,
+        created_on: s.created_on,
+        last_modified_by: s.last_modified_by,
+        last_modified_on: s.last_modified_on,
+        status_label: s.status_label
+      }));
+    }
+    return [
+      {
+        task_periodicity_id: t.task_periodicity_id,
+        task_status_id: t.task_status_id,
+        task_date: t.task_date || '',
+        task_start_time: t.task_start_time || '',
+        task_end_time: t.task_end_time || '',
+        task_remarks: t.task_remarks,
+        task_order_id: t.task_order_id,
+        estimated_hours: t.estimated_hours,
+        spent_hours: t.spent_hours,
+        status_label: t.status_label
+      }
+    ];
+  }
+
+  private getScheduleDateRange(schedules: TaskSchedule[], fallbackDate: string): { startDate: string; endDate: string } {
+    const dates = schedules.map(s => s.task_date || '').filter(Boolean).sort();
+    if (!dates.length) {
+      return { startDate: fallbackDate || '', endDate: fallbackDate || '' };
+    }
+    return {
+      startDate: dates[0] || '',
+      endDate: dates[dates.length - 1] || ''
     };
   }
 

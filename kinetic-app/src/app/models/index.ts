@@ -86,6 +86,25 @@ export interface TaskArtifact {
   created_on?: string;
 }
 
+/** One row in tasks_manager_tasks_periodicty (multiple per task) */
+export interface TaskSchedule {
+  task_periodicity_id?: string;
+  task_id_fk?: string;
+  task_remarks?: string;
+  task_status_id: string;
+  task_date: string;
+  task_start_time: string;
+  task_end_time: string;
+  task_order_id?: number;
+  estimated_hours?: number;
+  spent_hours?: number;
+  created_by?: string;
+  created_on?: string;
+  last_modified_by?: string;
+  last_modified_on?: string;
+  status_label?: string;
+}
+
 export interface UserProjectMapping {
   mapping_id: string;
   user_id_fk: string;
@@ -108,11 +127,11 @@ export interface Task {
   task_id: string;
   project_id_fk: string;
   task_title: string;
+  task_description?: string;
   task_remarks?: string;
   task_status_id: string;
   task_assignees?: string; // Pipe separated user IDs
-  task_start_date: string;
-  task_end_date: string;
+  task_date: string;
   task_start_time: string;
   task_end_time: string;
   task_order_id: number;
@@ -123,18 +142,22 @@ export interface Task {
   created_by: string;
   created_on: string;
   artifacts?: TaskArtifact[];
+  /** Primary key of merged primary schedule row (when present) */
+  task_periodicity_id?: string;
+  /** All periodicity / schedule rows for this task */
+  schedules?: TaskSchedule[];
   last_modified_by?: string;
   last_modified_on?: string;
-  
+
   // Enriched fields from backend
   project_name?: string;
   status_label?: string;
   priority_label?: string;
   type_label?: string;
   assignee_names?: string;
-  
+
   // UI helper fields (mappings for older logic)
-  status?: string; 
+  status?: string;
   priority?: string;
 }
 
